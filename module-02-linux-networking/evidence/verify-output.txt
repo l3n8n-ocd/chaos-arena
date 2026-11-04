@@ -1,5 +1,5 @@
 Chaos Arena — Module 02 verification report
-Generated: 2026-11-04 08:40:18 UTC
+Generated: 2026-11-04 09:30:11 UTC
 
 =================== 1. SYSTEM ===================
 $ hostnamectl --static
@@ -9,14 +9,14 @@ $ lsb_release -ds
 Ubuntu 24.04.5 LTS
 
 $ uptime -p
-up 18 minutes
+up 1 hour, 7 minutes
 
 $ timedatectl | grep 'Time zone'
                 Time zone: Asia/Manila (PST, +0800)
 
 $ free -h
                total        used        free      shared  buff/cache   available
-Mem:           909Mi       340Mi       208Mi       2.8Mi       476Mi       568Mi
+Mem:           909Mi       356Mi       152Mi       2.8Mi       517Mi       552Mi
 Swap:          2.0Gi          0B       2.0Gi
 
 $ df -h /
@@ -61,11 +61,11 @@ enabled
 
 $ ps -eo pid,user,%cpu,%mem,comm --sort=-%mem | head -n 8
     PID USER     %CPU %MEM COMMAND
+   3159 root      0.1  4.9 fwupd
     539 root      0.0  4.1 snapd
    1630 root      0.0  3.6 fail2ban-server
     190 root      0.0  2.9 multipathd
     732 root      0.0  2.4 unattended-upgr
-   2109 root      0.0  2.2 packagekitd
     526 root      0.0  2.2 networkd-dispat
     532 root      0.0  2.2 amazon-ssm-agen
 
@@ -128,28 +128,23 @@ Link 2 (ens5): 172.31.0.2
 
 =================== 7. LISTENING PORTS ===================
 $ ss -tulpn | grep LISTEN
-tcp   LISTEN 0      4096             0.0.0.0:22        0.0.0.0:*    users:(("sshd",pid=1032,fd=3),("systemd",pid=1,fd=183))                           
-tcp   LISTEN 0      511              0.0.0.0:80        0.0.0.0:*    users:(("nginx",pid=2622,fd=5),("nginx",pid=2621,fd=5),("nginx",pid=2086,fd=5))   
+tcp   LISTEN 0      4096             0.0.0.0:22        0.0.0.0:*    users:(("sshd",pid=1032,fd=3),("systemd",pid=1,fd=197))                           
+tcp   LISTEN 0      511              0.0.0.0:80        0.0.0.0:*    users:(("nginx",pid=3414,fd=5),("nginx",pid=3413,fd=5),("nginx",pid=2086,fd=5))   
 tcp   LISTEN 0      4096          127.0.0.54:53        0.0.0.0:*    users:(("systemd-resolve",pid=338,fd=17))                                         
-tcp   LISTEN 0      511              0.0.0.0:443       0.0.0.0:*    users:(("nginx",pid=2622,fd=18),("nginx",pid=2621,fd=18),("nginx",pid=2086,fd=18))
+tcp   LISTEN 0      511              0.0.0.0:443       0.0.0.0:*    users:(("nginx",pid=3414,fd=18),("nginx",pid=3413,fd=18),("nginx",pid=2086,fd=18))
 tcp   LISTEN 0      4096       127.0.0.53%lo:53        0.0.0.0:*    users:(("systemd-resolve",pid=338,fd=15))                                         
-tcp   LISTEN 0      4096                [::]:22           [::]:*    users:(("sshd",pid=1032,fd=4),("systemd",pid=1,fd=184))                           
-tcp   LISTEN 0      511                 [::]:80           [::]:*    users:(("nginx",pid=2622,fd=6),("nginx",pid=2621,fd=6),("nginx",pid=2086,fd=6))   
-tcp   LISTEN 0      511                 [::]:443          [::]:*    users:(("nginx",pid=2622,fd=17),("nginx",pid=2621,fd=17),("nginx",pid=2086,fd=17))
+tcp   LISTEN 0      4096                [::]:22           [::]:*    users:(("sshd",pid=1032,fd=4),("systemd",pid=1,fd=198))                           
+tcp   LISTEN 0      511                 [::]:80           [::]:*    users:(("nginx",pid=3414,fd=6),("nginx",pid=3413,fd=6),("nginx",pid=2086,fd=6))   
+tcp   LISTEN 0      511                 [::]:443          [::]:*    users:(("nginx",pid=3414,fd=17),("nginx",pid=3413,fd=17),("nginx",pid=2086,fd=17))
 
 
 =================== 8. HTTP TESTS (from the server itself) ===================
-$ curl -s http://localhost/health
-<html>
-<head><title>404 Not Found</title></head>
-<body>
-<center><h1>404 Not Found</h1></center>
-<hr><center>nginx/1.24.0 (Ubuntu)</center>
-</body>
-</html>
+$ curl -s --resolve chaos-arena.duckdns.org:443:127.0.0.1 https://chaos-arena.duckdns.org/health
+ok
 
-$ curl -sI http://localhost | head -n 1
-HTTP/1.1 404 Not Found
+$ curl -sI --resolve chaos-arena.duckdns.org:443:127.0.0.1 https://chaos-arena.duckdns.org | grep -Ei '^(HTTP|server)'
+HTTP/1.1 200 OK
+Server: nginx
 
 
 =================== 9. DNS & HTTPS TESTS for chaos-arena.duckdns.org ===================
@@ -173,7 +168,7 @@ notBefore=Nov  4 07:37:18 2026 GMT
 notAfter=Feb  2 07:37:17 2027 GMT
 
 $ systemctl list-timers --no-pager | grep -i certbot
-Thu 2026-11-05 02:12:42 PST            9h -                                      - certbot.timer                  certbot.service
+Thu 2026-11-05 09:25:44 PST     15h -                                     - certbot.timer                  certbot.service
 
 
 =================== END OF REPORT ===================
