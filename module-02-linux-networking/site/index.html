@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chaos Arena — Coming Soon</title>
+  <meta name="description" content="A multiplayer tug-of-war you're allowed to break. Coming soon.">
+  <style>
+    :root {
+      --bg: #0d0f14; --panel: #161a22; --text: #e8eaf0; --muted: #8a91a3;
+      --red: #ff4d5e; --blue: #3d8bff; --ok: #33d17a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: grid; place-items: center;
+      background: radial-gradient(circle at 20% 20%, #2a0f16 0, transparent 40%),
+                  radial-gradient(circle at 80% 80%, #0f1a2e 0, transparent 40%), var(--bg);
+      color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      padding: 16px;
+    }
+    main { width: 100%; max-width: 640px; text-align: center; }
+    .status {
+      display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px;
+      border-radius: 999px; background: var(--panel); font-size: 14px; color: var(--muted);
+    }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ok);
+           box-shadow: 0 0 10px var(--ok); animation: pulse 1.6s infinite; }
+    h1 { font-size: clamp(2.4rem, 8vw, 4rem); margin: 24px 0 8px; letter-spacing: -1px; }
+    h1 .r { color: var(--red); } h1 .b { color: var(--blue); }
+    p.tag { color: var(--muted); font-size: 1.1rem; margin: 0 0 40px; }
+    .arena { position: relative; height: 80px; margin: 0 auto 40px; overflow: hidden; }
+    .rope {
+      position: absolute; top: 58px; left: 32px; right: 32px; height: 6px; margin-top: -3px;
+      background: linear-gradient(90deg, var(--red) 0 50%, var(--blue) 50% 100%); border-radius: 3px;
+      animation: tug 3s ease-in-out infinite;
+    }
+    .flag {
+      position: absolute; top: 58px; left: 50%; width: 18px; height: 34px;
+      margin: -17px 0 0 -9px; background: var(--text); border-radius: 3px;
+      animation: tug 3s ease-in-out infinite;
+    }
+    .team { position: absolute; top: 0; font-weight: 700; letter-spacing: 1px; }
+    .team.red { left: 0; color: var(--red); } .team.blue { right: 0; color: var(--blue); }
+    .card { background: var(--panel); border-radius: 14px; padding: 20px 24px; text-align: left; }
+    .card h2 { margin: 0 0 10px; font-size: 1rem; }
+    .card ul { margin: 0; padding-left: 20px; color: var(--muted); line-height: 1.8; }
+    footer { margin-top: 28px; font-size: 13px; color: var(--muted); line-height: 1.6; }
+    @keyframes tug { 0%,100% { transform: translateX(-24px); } 50% { transform: translateX(24px); } }
+    @keyframes pulse { 50% { opacity: .4; } }
+    @media (prefers-reduced-motion: reduce) { .rope, .flag, .dot { animation: none; } }
+  </style>
+</head>
+<body>
+  <main>
+    <span class="status"><span class="dot"></span> Server online</span>
+    <h1><span class="r">Chaos</span> <span class="b">Arena</span></h1>
+    <p class="tag">A multiplayer tug-of-war you're <em>allowed</em> to break.</p>
+
+    <div class="arena" aria-hidden="true">
+      <div class="rope"></div>
+      <div class="flag"></div>
+      <span class="team red">RED</span>
+      <span class="team blue">BLUE</span>
+    </div>
+
+    <div class="card">
+      <h2>Coming soon</h2>
+      <ul>
+        <li>Pick a team and click to pull the rope.</li>
+        <li>Hit the <strong>CHAOS</strong> button to crash the server on purpose.</li>
+        <li>Watch it heal itself and see the recovery time live.</li>
+      </ul>
+    </div>
+
+    <footer>
+      Served by Nginx on Ubuntu 24.04 · AWS EC2 · secured with UFW, fail2ban &amp; HTTPS<br>
+      Module 02 of the Cloud Computing &amp; DevOps track · deployed __DEPLOYED_AT__
+    </footer>
+  </main>
+</body>
+</html>

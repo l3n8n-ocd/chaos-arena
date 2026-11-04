@@ -1,0 +1,12 @@
+# Keep Linux line endings for files that run on the server,
+# even when committed from Windows. (Windows CRLF breaks bash scripts.)
+* text=auto
+*.sh   text eol=lf
+*.conf text eol=lf
+Dockerfile text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+
+*.png binary
+*.jpg binary
+*.gif binary
