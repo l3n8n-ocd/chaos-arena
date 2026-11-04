@@ -47,8 +47,19 @@ sed "s|__DEPLOYED_AT__|$DEPLOYED_AT|g" "$MODULE_DIR/site/index.html" > "$APP_DIR
 chown deployer:arena "$APP_DIR/site/index.html"
 chmod 664 "$APP_DIR/site/index.html"   # owner+group can edit, nginx (others) can read
 
-echo "==> [3/4] Writing Nginx site config for '$DOMAIN'..."
-sed "s|__DOMAIN__|$DOMAIN|g" "$MODULE_DIR/nginx/chaos-arena.conf" > "$SITE_CONF"
+echo "==> [3/4] Writing Nginx config for '$DOMAIN'..."
+# Hide the Nginx version on EVERY response, including error pages and the
+# extra port-80 block certbot creates in step 5 (not just our own site block).
+echo "server_tokens off;" > /etc/nginx/conf.d/chaos-arena-hardening.conf
+
+if grep -q "managed by Certbot" "$SITE_CONF" 2>/dev/null && [[ "${FORCE:-0}" != "1" ]]; then
+  # HTTPS was already added by 05-enable-https.sh. Overwriting the site config
+  # would remove it, so keep it (the page above was still updated).
+  echo "    HTTPS is already set up in $SITE_CONF, keeping it."
+  echo "    (To rebuild it anyway: sudo FORCE=1 $0 $DOMAIN, then re-run 05-enable-https.sh)"
+else
+  sed "s|__DOMAIN__|$DOMAIN|g" "$MODULE_DIR/nginx/chaos-arena.conf" > "$SITE_CONF"
+fi
 ln -sf "$SITE_CONF" /etc/nginx/sites-enabled/chaos-arena   # "enable" the site
 rm -f /etc/nginx/sites-enabled/default                     # remove the Nginx demo page
 

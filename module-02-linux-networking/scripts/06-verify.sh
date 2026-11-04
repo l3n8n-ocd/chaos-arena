@@ -61,8 +61,15 @@ section "7. LISTENING PORTS"
 run "ss -tulpn | grep LISTEN"
 
 section "8. HTTP TESTS (from the server itself)"
-run "curl -s http://localhost/health"
-run "curl -sI http://localhost | head -n 1"
+if [[ -n "$DOMAIN" ]]; then
+  # --resolve sends the request to this server (127.0.0.1) while still using
+  # the real domain name, so Nginx picks the right site and certificate.
+  run "curl -s --resolve $DOMAIN:443:127.0.0.1 https://$DOMAIN/health"
+  run "curl -sI --resolve $DOMAIN:443:127.0.0.1 https://$DOMAIN | grep -Ei '^(HTTP|server)'"
+else
+  run "curl -s http://localhost/health"
+  run "curl -sI http://localhost | grep -Ei '^(HTTP|server)'"
+fi
 
 if [[ -n "$DOMAIN" ]]; then
   section "9. DNS & HTTPS TESTS for $DOMAIN"
