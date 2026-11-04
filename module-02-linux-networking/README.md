@@ -161,9 +161,9 @@ ssh -o PubkeyAuthentication=no ubuntu@<ELASTIC_IP>                       # expec
 
 ### C1. Free domain with DuckDNS
 1. Go to **https://www.duckdns.org** → sign in with GitHub.
-2. Type a subdomain (e.g. `chaos-arena-lenon`) → **add domain**.
+2. Type a subdomain (e.g. `chaos-arena`) → **add domain**.
 3. In the **current ip** box enter your `<ELASTIC_IP>` → **update ip**.
-4. Check it from PowerShell: `nslookup chaos-arena-lenon.duckdns.org`. The answer should be your Elastic IP.
+4. Check it from PowerShell: `nslookup chaos-arena.duckdns.org`. The answer should be your Elastic IP.
 
 📸 *Screenshot: DuckDNS dashboard showing the domain + IP.*
 
@@ -171,10 +171,10 @@ ssh -o PubkeyAuthentication=no ubuntu@<ELASTIC_IP>                       # expec
 On the server (replace the domain with yours):
 ```bash
 cd ~/chaos-arena/module-02-linux-networking/scripts
-sudo ./04-install-nginx.sh chaos-arena-lenon.duckdns.org
-sudo ./05-enable-https.sh  chaos-arena-lenon.duckdns.org
+sudo ./04-install-nginx.sh chaos-arena.duckdns.org
+sudo ./05-enable-https.sh  chaos-arena.duckdns.org
 ```
-Open `https://chaos-arena-lenon.duckdns.org` and look for the padlock. 📸 *Screenshot: the page in your browser with the padlock visible.*
+Open `https://chaos-arena.duckdns.org` and look for the padlock. 📸 *Screenshot: the page in your browser with the padlock visible.*
 
 ---
 
@@ -183,16 +183,16 @@ Open `https://chaos-arena-lenon.duckdns.org` and look for the padlock. 📸 *Scr
 ### D1. Server-side report
 ```bash
 cd ~/chaos-arena/module-02-linux-networking/scripts
-sudo ./06-verify.sh chaos-arena-lenon.duckdns.org | tee ../evidence/verify-output.txt
+sudo ./06-verify.sh chaos-arena.duckdns.org | tee ../evidence/verify-output.txt
 ```
 
 ### D2. Client-side tests (Windows PowerShell)
 ```powershell
-nslookup chaos-arena-lenon.duckdns.org                               # DNS works
-Test-NetConnection chaos-arena-lenon.duckdns.org -Port 443           # TcpTestSucceeded : True
-Test-NetConnection chaos-arena-lenon.duckdns.org -Port 3306          # False: port is blocked, as it should be
-curl.exe -I https://chaos-arena-lenon.duckdns.org                    # HTTP/1.1 200 OK
-curl.exe https://chaos-arena-lenon.duckdns.org/health                # ok
+nslookup chaos-arena.duckdns.org                               # DNS works
+Test-NetConnection chaos-arena.duckdns.org -Port 443           # TcpTestSucceeded : True
+Test-NetConnection chaos-arena.duckdns.org -Port 3306          # False: port is blocked, as it should be
+curl.exe -I https://chaos-arena.duckdns.org                    # HTTP/1.1 200 OK
+curl.exe https://chaos-arena.duckdns.org/health                # ok
 ```
 📸 *Screenshot: this PowerShell output.*
 

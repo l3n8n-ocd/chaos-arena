@@ -33,7 +33,7 @@
 DNS turns names into IPs, like a phone book.
 
 ```
-Browser → "chaos-arena-lenon.duckdns.org?" → resolver (ISP / 8.8.8.8 / 1.1.1.1)
+Browser → "chaos-arena.duckdns.org?" → resolver (ISP / 8.8.8.8 / 1.1.1.1)
         → asks duckdns.org's nameservers → "A record: 13.x.x.x" → browser connects to 13.x.x.x
 ```
 | Record | Purpose |

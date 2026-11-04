@@ -5,7 +5,7 @@ Pick Team Red or Team Blue and click to pull the rope, or smash the **CHAOS** bu
 
 Chaos Arena is my project for the **Codomax Digital Solutions Cloud Computing & DevOps virtual internship**. Each module adds a new layer of cloud and DevOps engineering to the same app, so it gets more resilient with every module.
 
-🌐 **Live:** `https://<your-subdomain>.duckdns.org` *(teaser page from Module 02; the game arrives in Module 03)*
+🌐 **Live:** [https://chaos-arena.duckdns.org](https://chaos-arena.duckdns.org) *(teaser page from Module 02; the game arrives in Module 03)*
 
 ## Roadmap
 
