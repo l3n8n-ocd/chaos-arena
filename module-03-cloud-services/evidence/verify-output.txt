@@ -1,0 +1,222 @@
+Chaos Arena — Module 03 verification report
+Generated: 2026-11-10 02:46:35 UTC
+
+=================== 1. RUNTIME (cloud compute) ===================
+$ node -v && npm -v
+v22.23.4
+10.9.9
+
+$ uptime -p && free -h | head -n 2
+up 5 days, 18 hours, 24 minutes
+               total        used        free      shared  buff/cache   available
+Mem:           909Mi       418Mi        40Mi       3.1Mi       581Mi       491Mi
+
+
+=================== 2. SERVICE, SELF-HEALING & RESOURCE QUOTAS (systemd) ===================
+$ systemctl is-active chaos-arena nginx && systemctl is-enabled chaos-arena
+active
+active
+enabled
+
+$ systemctl show chaos-arena -p User -p Group -p Restart -p RestartUSec -p NRestarts -p MemoryMax -p MemoryHigh -p CPUQuotaPerSecUSec -p TasksMax -p NoNewPrivileges -p ProtectSystem
+Restart=always
+RestartUSec=2s
+NRestarts=3
+CPUQuotaPerSecUSec=600ms
+MemoryHigh=262144000
+MemoryMax=314572800
+TasksMax=100
+User=deployer
+Group=arena
+ProtectSystem=full
+NoNewPrivileges=yes
+
+$ systemctl show chaos-arena -p MemoryCurrent -p TasksCurrent
+MemoryCurrent=33009664
+TasksCurrent=11
+
+$ ps -o pid,user,group,rss,etime,args -C node
+    PID USER     GROUP      RSS     ELAPSED COMMAND
+  28232 deployer arena    80212       16:19 /usr/bin/node server.js
+
+
+=================== 3. ENVIRONMENT VARIABLES & SECRETS ===================
+$ stat -c '%A  %U:%G  %n' /etc/chaos-arena /etc/chaos-arena/chaos-arena.env
+drwx------  root:root  /etc/chaos-arena
+-rw-------  root:root  /etc/chaos-arena/chaos-arena.env
+
+# Settings file with the secret hidden:
+$ grep -v '^#' /etc/chaos-arena/chaos-arena.env | sed -E 's/^(ADMIN_TOKEN)=.*/\1=******** (hidden)/'
+NODE_ENV=production
+HOST=127.0.0.1
+PORT=3000
+STORE=dynamo
+AWS_REGION=ap-southeast-2
+TABLE_NAME=chaos-arena
+BUCKET_NAME=chaos-arena-915059653170-ap-southeast-2
+WIN_AT=50
+CHAOS_COOLDOWN_SEC=60
+ADMIN_TOKEN=******** (hidden)
+
+# No AWS access keys anywhere on this server (the IAM role is used instead):
+$ grep -c 'AWS_ACCESS_KEY\|AWS_SECRET' /etc/chaos-arena/chaos-arena.env; ls -d /root/.aws /home/*/.aws 2>/dev/null || echo 'no ~/.aws folders: OK'
+0
+no ~/.aws folders: OK
+
+# The secret is not in the Git repository:
+$ cd /srv/chaos-arena/app && ls -a | grep -c '^\.env$' ; echo '(0 = no .env file deployed: OK)'
+0
+(0 = no .env file deployed: OK)
+
+
+=================== 4. IAM ROLE (identity of this server) ===================
+$ (instance metadata service, IMDSv2)
+Role in use      : chaos-arena-ec2-role
+Instance profile : arn:aws:iam::915059653170:instance-profile/chaos-arena-ec2-profile
+Region / AZ      : ap-southeast-2c
+IMDSv1 blocked?  : 401 (401 = yes, token required)
+
+
+=================== 5. NETWORKING ===================
+# The app listens on localhost only; Nginx is the only public door:
+$ ss -tlnp | grep -E ':(22|80|443|3000)\b' | awk '{print $4, $6}'
+0.0.0.0:22 users:(("sshd",pid=1032,fd=3),("systemd",pid=1,fd=173))
+0.0.0.0:80 users:(("nginx",pid=27891,fd=5),("nginx",pid=27890,fd=5),("nginx",pid=2086,fd=5))
+0.0.0.0:443 users:(("nginx",pid=27891,fd=18),("nginx",pid=27890,fd=18),("nginx",pid=2086,fd=18))
+127.0.0.1:3000 users:(("node",pid=28232,fd=22))
+[::]:22 users:(("sshd",pid=1032,fd=4),("systemd",pid=1,fd=174))
+[::]:80 users:(("nginx",pid=27891,fd=6),("nginx",pid=27890,fd=6),("nginx",pid=2086,fd=6))
+[::]:443 users:(("nginx",pid=27891,fd=17),("nginx",pid=27890,fd=17),("nginx",pid=2086,fd=17))
+
+$ ufw status | grep -E '^(Status|22|80|443|3000)'
+Status: active
+22/tcp                     LIMIT       Anywhere                   # SSH (rate-limited)
+80/tcp                     ALLOW       Anywhere                   # HTTP
+443/tcp                    ALLOW       Anywhere                   # HTTPS
+22/tcp (v6)                LIMIT       Anywhere (v6)              # SSH (rate-limited)
+80/tcp (v6)                ALLOW       Anywhere (v6)              # HTTP
+443/tcp (v6)               ALLOW       Anywhere (v6)              # HTTPS
+
+
+=================== 6. DATABASE & STORAGE (DynamoDB + S3 through the IAM role) ===================
+$ curl -s -m 10 http://127.0.0.1:3000/api/status | pretty
+{
+  "status": "ok",
+  "checks": {
+    "database": {
+      "ok": true,
+      "kind": "dynamo",
+      "detail": "table chaos-arena is ACTIVE"
+    },
+    "storage": {
+      "ok": true,
+      "kind": "s3",
+      "detail": "bucket chaos-arena-915059653170-ap-southeast-2 is reachable"
+    }
+  },
+  "region": "ap-southeast-2",
+  "node": "v22.23.4",
+  "environment": "production",
+  "memoryMb": 79,
+  "uptimeSec": 978
+}
+
+
+=================== 7. LIVE WEB APPLICATION (through Nginx + HTTPS) ===================
+$ curl -s --resolve chaos-arena.duckdns.org:443:127.0.0.1 https://chaos-arena.duckdns.org/health
+ok
+
+$ curl -s --resolve chaos-arena.duckdns.org:443:127.0.0.1 https://chaos-arena.duckdns.org/api/health
+{"status":"ok","uptimeSec":979,"store":"dynamo","bootId":"5daa3e65"}
+$ curl -sI --resolve chaos-arena.duckdns.org:443:127.0.0.1 https://chaos-arena.duckdns.org/ | grep -Ei '^(HTTP|server|strict-transport|content-security|x-frame|x-content)'
+HTTP/1.1 200 OK
+Server: nginx
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Strict-Transport-Security: max-age=86400
+Content-Security-Policy: default-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'
+
+$ curl -s --resolve chaos-arena.duckdns.org:443:127.0.0.1 https://chaos-arena.duckdns.org/ | grep -o '<title>.*</title>'
+<title>Chaos Arena</title>
+
+$ curl -sI http://chaos-arena.duckdns.org/ --resolve chaos-arena.duckdns.org:80:127.0.0.1 | grep -Ei '^(HTTP|location)'
+HTTP/1.1 301 Moved Permanently
+Location: https://chaos-arena.duckdns.org/
+
+# Play one click for each team through the public API (rope ends where it started):
+$ curl -s --resolve chaos-arena.duckdns.org:443:127.0.0.1 -X POST -H 'Content-Type: application/json' -d '{"team":"red","count":1,"pid":"verify-script"}' https://chaos-arena.duckdns.org/api/pull | pretty | grep -E '"(rope|round|totalClicks)"'
+  "rope": -1,
+  "round": 1,
+  "totalClicks": 1,
+
+$ curl -s --resolve chaos-arena.duckdns.org:443:127.0.0.1 -X POST -H 'Content-Type: application/json' -d '{"team":"blue","count":1,"pid":"verify-script"}' https://chaos-arena.duckdns.org/api/pull | pretty | grep -E '"(rope|round|totalClicks)"'
+  "rope": 0,
+  "round": 1,
+  "totalClicks": 2,
+
+# Bad input and the admin endpoint are rejected:
+$ curl -s -o /dev/null -w 'bad team -> HTTP %{http_code}\n' --resolve chaos-arena.duckdns.org:443:127.0.0.1 -X POST -H 'Content-Type: application/json' -d '{"team":"green"}' https://chaos-arena.duckdns.org/api/pull
+bad team -> HTTP 400
+
+$ curl -s -o /dev/null -w 'admin reset without token -> HTTP %{http_code}\n' --resolve chaos-arena.duckdns.org:443:127.0.0.1 -X POST https://chaos-arena.duckdns.org/api/admin/reset
+admin reset without token -> HTTP 401
+
+
+=================== 8. APPLICATION LOGGING ===================
+$ ls -l /srv/chaos-arena/logs/app.log && tail -n 4 /srv/chaos-arena/logs/app.log | cut -c1-220
+-rw-rw-r-- 1 deployer arena 5454 Nov 10 10:46 /srv/chaos-arena/logs/app.log
+{"time":"2026-11-10T02:30:17.729Z","level":"info","msg":"listening","url":"http://127.0.0.1:3000","store":"dynamo"}
+{"time":"2026-11-10T02:30:17.803Z","level":"info","msg":"backup saved to S3","bucket":"chaos-arena-915059653170-ap-southeast-2","key":"incidents/2026-11-10T02-30-14-618Z.json"}
+{"time":"2026-11-10T02:46:11.849Z","level":"info","msg":"game reset by admin"}
+{"time":"2026-11-10T02:46:36.911Z","level":"warn","msg":"admin reset rejected: wrong token","ip":"127.0.0.1"}
+
+$ cat /etc/logrotate.d/chaos-arena | grep -vE '^\s*#'
+/srv/chaos-arena/logs/app.log {
+    su deployer arena
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}
+
+$ /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a status -m ec2 | grep -E '"(status|configstatus)"'
+  "status": "running",
+  "configstatus": "configured",
+
+
+=================== 9. CHAOS TEST (crash the app on purpose, measure self-healing) ===================
+Restarts so far: 3 | current PID: 28232
+$ curl -X POST https://chaos-arena.duckdns.org/api/chaos
+{"status":"crashing","incident":"2026-11-10T02:46:37.017Z","message":"Boom. Watch me heal."}
+
+# While it is down, Nginx answers for it:
+GET /api/health -> HTTP 503
+GET /           -> HTTP 200 (the page itself still loads)
+
+RESULT: healed. Back online 3063 ms after the CHAOS request.
+Restarts now: 4 | new PID: 28547
+
+# What the app itself recorded in DynamoDB:
+$ curl -s http://127.0.0.1:3000/api/state | pretty | grep -A 8 '"chaos"'
+  "chaos": {
+    "total": 4,
+    "cooldownSec": 60,
+    "cooldownRemainingSec": 57,
+    "lastRecoveryMs": 2967,
+    "avgRecoveryMs": 3017,
+    "bestRecoveryMs": 2899
+  },
+  "incidents": [
+
+# The story in the log file:
+$ grep -E 'CHAOS|deliberate crash|recovered from crash|listening' /srv/chaos-arena/logs/app.log | tail -n 4 | cut -c1-200
+{"time":"2026-11-10T02:46:37.027Z","level":"warn","msg":"CHAOS button pressed: crashing on purpose","incident":"2026-11-10T02:46:37.017Z","round":1}
+{"time":"2026-11-10T02:46:37.178Z","level":"error","msg":"process exiting with code 1 (deliberate crash)"}
+{"time":"2026-11-10T02:46:39.989Z","level":"info","msg":"recovered from crash","incident":"2026-11-10T02:46:37.017Z","recoveryMs":2967,"round":1}
+{"time":"2026-11-10T02:46:39.997Z","level":"info","msg":"listening","url":"http://127.0.0.1:3000","store":"dynamo"}
+
+
+=================== END OF REPORT ===================
