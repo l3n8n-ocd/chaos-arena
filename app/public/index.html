@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chaos Arena</title>
+  <meta name="description" content="A multiplayer tug-of-war you're allowed to break. Press CHAOS, crash the server, and watch it heal itself.">
+  <meta name="theme-color" content="#0d0f14">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='16' height='32' fill='%23ff4d5e'/%3E%3Crect x='16' width='16' height='32' fill='%233d8bff'/%3E%3Crect x='13' y='6' width='6' height='20' rx='2' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <span class="status" id="status" role="status" aria-live="polite">
+        <span class="dot" id="status-dot"></span>
+        <span id="status-text">Connecting…</span>
+      </span>
+      <h1><span class="r">Chaos</span> <span class="b">Arena</span></h1>
+      <p class="tag">A multiplayer tug-of-war you're <em>allowed</em> to break.</p>
+    </header>
+
+    <!-- ===================== The game ===================== -->
+    <section class="card arena-card" aria-label="Tug of war">
+      <div class="scoreboard">
+        <div class="score red">
+          <span class="score-label">Red</span>
+          <span class="score-value" id="wins-red">0</span>
+        </div>
+        <div class="round">
+          <span class="round-label">Round</span>
+          <span class="round-value" id="round">1</span>
+        </div>
+        <div class="score blue">
+          <span class="score-label">Blue</span>
+          <span class="score-value" id="wins-blue">0</span>
+        </div>
+      </div>
+
+      <div class="arena" id="arena">
+        <div class="zone red" aria-hidden="true"></div>
+        <div class="zone blue" aria-hidden="true"></div>
+        <div class="rope" id="rope" aria-hidden="true"></div>
+        <div class="centre" aria-hidden="true"></div>
+        <div class="flag" id="flag" aria-hidden="true"></div>
+        <div class="banner" id="banner" hidden></div>
+      </div>
+      <p class="rope-text" id="rope-text" aria-live="polite">The rope is dead centre.</p>
+
+      <div class="teams" role="group" aria-label="Pick your team">
+        <button class="team-btn red" id="join-red" type="button" aria-pressed="false">Join Red</button>
+        <button class="team-btn blue" id="join-blue" type="button" aria-pressed="false">Join Blue</button>
+      </div>
+
+      <button class="pull" id="pull" type="button" disabled>Pick a team to play</button>
+      <p class="hint"><span id="players">0 players</span> online · tap fast, or hold <kbd>Space</kbd></p>
+    </section>
+
+    <!-- ===================== The chaos button ===================== -->
+    <section class="card chaos-card" aria-label="Chaos">
+      <div>
+        <h2>Break it</h2>
+        <p>This button really crashes the game server. Everyone gets kicked for a few seconds, then it heals itself and the game carries on where it stopped.</p>
+      </div>
+      <button class="chaos" id="chaos" type="button" disabled>CHAOS</button>
+    </section>
+
+    <!-- ===================== Reliability stats ===================== -->
+    <section class="card" aria-label="Reliability">
+      <h2>Reliability</h2>
+      <div class="stats">
+        <div class="stat"><span class="stat-value" id="stat-uptime">–</span><span class="stat-label">Uptime</span></div>
+        <div class="stat"><span class="stat-value" id="stat-crashes">–</span><span class="stat-label">Crashes survived</span></div>
+        <div class="stat"><span class="stat-value" id="stat-last">–</span><span class="stat-label">Last recovery</span></div>
+        <div class="stat"><span class="stat-value" id="stat-avg">–</span><span class="stat-label">Average recovery</span></div>
+      </div>
+      <h3>Recent crashes</h3>
+      <ul class="incidents" id="incidents"><li class="muted">Nobody has pressed the button yet.</li></ul>
+    </section>
+
+    <footer>
+      Node.js on AWS EC2 · game data in DynamoDB · backups in S3 · self-healing by systemd<br>
+      Built for the Cloud Computing &amp; DevOps track ·
+      <a href="https://github.com/l3n8n-ocd/chaos-arena" rel="noopener">source on GitHub</a>
+    </footer>
+  </main>
+
+  <script src="game.js" defer></script>
+</body>
+</html>

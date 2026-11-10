@@ -1,0 +1,10 @@
+{
+  "Rules": [
+    {
+      "ID": "expire-old-incident-reports",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "incidents/" },
+      "Expiration": { "Days": 90 }
+    }
+  ]
+}

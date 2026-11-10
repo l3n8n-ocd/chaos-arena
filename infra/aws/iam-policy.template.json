@@ -1,0 +1,50 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "GameTable",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:Query",
+        "dynamodb:DescribeTable"
+      ],
+      "Resource": "arn:aws:dynamodb:__REGION__:__ACCOUNT_ID__:table/__TABLE__"
+    },
+    {
+      "Sid": "BackupObjects",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject"
+      ],
+      "Resource": "arn:aws:s3:::__BUCKET__/*"
+    },
+    {
+      "Sid": "BackupBucketList",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::__BUCKET__"
+    },
+    {
+      "Sid": "ShipLogs",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogStreams"
+      ],
+      "Resource": [
+        "arn:aws:logs:__REGION__:__ACCOUNT_ID__:log-group:/chaos-arena/*",
+        "arn:aws:logs:__REGION__:__ACCOUNT_ID__:log-group:/chaos-arena/*:log-stream:*"
+      ]
+    },
+    {
+      "Sid": "FindLogGroups",
+      "Effect": "Allow",
+      "Action": "logs:DescribeLogGroups",
+      "Resource": "*"
+    }
+  ]
+}

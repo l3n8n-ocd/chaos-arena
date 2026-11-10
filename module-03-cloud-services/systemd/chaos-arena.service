@@ -1,0 +1,55 @@
+# =============================================================================
+# chaos-arena.service — runs the game as a systemd service (Module 03).
+# Installed to /etc/systemd/system/chaos-arena.service by scripts/02-deploy-app.sh
+#
+# This file is the "self-healing" part of Chaos Arena: when the Node.js process
+# dies (for example after someone presses CHAOS), systemd starts it again.
+# =============================================================================
+[Unit]
+Description=Chaos Arena game server (Node.js)
+Documentation=https://github.com/l3n8n-ocd/chaos-arena
+After=network-online.target
+Wants=network-online.target
+# Never give up restarting, no matter how often it crashes.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+# Run as the low-privilege "deployer" account, never as root.
+User=deployer
+Group=arena
+WorkingDirectory=/srv/chaos-arena/app
+
+# Settings and secrets come from a root-only file that is NOT in Git.
+EnvironmentFile=/etc/chaos-arena/chaos-arena.env
+Environment=NODE_OPTIONS=--max-old-space-size=192
+ExecStart=/usr/bin/node server.js
+
+# ---- Self-healing ----
+Restart=always
+RestartSec=2
+
+# ---- Logging: the app prints JSON lines; systemd appends them to a file that
+#      the CloudWatch agent ships to AWS ----
+StandardOutput=append:/srv/chaos-arena/logs/app.log
+StandardError=append:/srv/chaos-arena/logs/app.log
+
+# ---- Resource quotas: one buggy or abused app must not take down the server ----
+MemoryHigh=250M
+MemoryMax=300M
+CPUQuota=60%
+TasksMax=100
+LimitNOFILE=4096
+
+# ---- Sandboxing: limit what the process could damage if it were hacked ----
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

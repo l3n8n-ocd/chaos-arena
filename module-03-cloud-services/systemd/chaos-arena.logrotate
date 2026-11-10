@@ -1,0 +1,14 @@
+# Installed to /etc/logrotate.d/chaos-arena by scripts/02-deploy-app.sh
+# Keeps the app log from filling the disk: rotate daily, keep 7 compressed days.
+/srv/chaos-arena/logs/app.log {
+    su deployer arena
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    # copytruncate: the app keeps writing to the same open file, so copy it
+    # and then empty it, instead of moving it away.
+    copytruncate
+}

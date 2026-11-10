@@ -10,3 +10,9 @@ Dockerfile text eol=lf
 *.png binary
 *.jpg binary
 *.gif binary
+
+# Module 03+: files that run on the server keep Linux line endings
+*.service   text eol=lf
+*.logrotate text eol=lf
+*.js        text eol=lf
+*.json      text eol=lf
