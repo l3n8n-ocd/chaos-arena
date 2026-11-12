@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# =============================================================================
+# arena — shortcut for Docker Compose on the Chaos Arena server (Module 04)
+# Installed to /usr/local/bin/arena by scripts/02-run-containers.sh
+#
+#   arena ps                 list the containers and their health
+#   arena logs -f app        follow the game's logs (Ctrl+C to stop)
+#   arena restart app        restart one container
+#   arena up -d --build      rebuild and redeploy after a "git pull"
+#   arena down               stop and delete the containers (data is kept)
+#
+# It always prints the full docker compose command it runs, so you can learn it.
+# =============================================================================
+set -euo pipefail
+
+REPO_DIR="__REPO_DIR__"
+ENV_FILE="/etc/chaos-arena/chaos-arena.env"
+
+# Docker needs root. Re-run this command with sudo if needed.
+if [[ $EUID -ne 0 ]]; then exec sudo "$0" "$@"; fi
+
+# compose.aws.yaml needs the region for CloudWatch logging; read it from the
+# Module 03 settings file.
+AWS_REGION="$(grep -E '^AWS_REGION=' "$ENV_FILE" | cut -d= -f2-)"
+export AWS_REGION
+
+CMD=(docker compose --project-directory "$REPO_DIR" -f "$REPO_DIR/compose.yaml" -f "$REPO_DIR/compose.aws.yaml")
+echo "+ ${CMD[*]} $*" >&2
+exec "${CMD[@]}" "$@"

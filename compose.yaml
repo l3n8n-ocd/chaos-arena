@@ -1,0 +1,100 @@
+# =============================================================================
+# Chaos Arena — Docker Compose (Module 04)
+#
+# Two containers on one private network:
+#
+#   your browser --> [web] :8080 --(network "arena-net")--> [app] :3000
+#                    Nginx                                  Node.js game
+#
+# Run it anywhere Docker is installed:
+#   docker compose up --build        then open http://localhost:8080
+#
+# On the AWS server, compose.aws.yaml is added on top of this file
+# (DynamoDB instead of a local file, logs to CloudWatch).
+# =============================================================================
+name: chaos-arena
+
+services:
+  # ---------------------------------------------------------------------------
+  # The game server (Node.js)
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: ./app
+      target: runtime
+    image: chaos-arena-app:local
+    # Self-healing: whenever the process exits (CHAOS!), Docker starts it again.
+    # "unless-stopped" = always restart, except after a manual "docker compose stop".
+    restart: unless-stopped
+    # A tiny init process becomes PID 1: it passes stop signals on to Node.js
+    # (so the game is saved on shutdown) and cleans up finished processes.
+    init: true
+    environment:
+      HOST: 0.0.0.0               # listen on the container's network (only reachable inside Docker)
+      PORT: "3000"
+      NODE_ENV: production
+      STORE: file                 # local default; the AWS override switches this to dynamo
+      DATA_FILE: /data/store.json
+      TRUST_PROXY: loopback, uniquelocal
+      CHAOS_COOLDOWN_SEC: ${CHAOS_COOLDOWN_SEC:-60}
+    volumes:
+      - arena-data:/data          # named volume: data survives container replacement
+    networks:
+      - arena-net
+    # No "ports:" section on purpose: the app is NOT reachable from outside
+    # Docker. Only the web container can talk to it.
+
+    # ---- Hardening ----
+    read_only: true               # the container's filesystem can't be changed...
+    tmpfs:
+      - /tmp                      # ...except a small scratch folder in memory
+    cap_drop:
+      - ALL                       # drop every special Linux privilege
+    security_opt:
+      - no-new-privileges:true
+
+    # ---- Resource quotas ----
+    deploy:
+      resources:
+        limits:
+          cpus: "0.60"
+          memory: 300M
+          pids: 100
+
+  # ---------------------------------------------------------------------------
+  # The web front door (Nginx): web page + reverse proxy to the app
+  # ---------------------------------------------------------------------------
+  web:
+    build:
+      context: .
+      dockerfile: docker/web/Dockerfile
+    image: chaos-arena-web:local
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy   # at start-up, wait until the app passes its health check
+    ports:
+      # Published on 127.0.0.1 ONLY: reachable from this machine (host Nginx
+      # or your browser on localhost), never directly from the internet.
+      - "127.0.0.1:8080:8080"
+    networks:
+      - arena-net
+    read_only: true
+    tmpfs:
+      - /tmp                      # Nginx's temporary files and PID file
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.30"
+          memory: 64M
+          pids: 50
+
+networks:
+  arena-net:                      # a private "user-defined bridge" network with built-in DNS
+
+volumes:
+  arena-data:                     # managed by Docker, kept until "docker compose down -v"

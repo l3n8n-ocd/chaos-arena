@@ -1,0 +1,5 @@
+# Build context for docker/web/Dockerfile is the whole repo.
+# Ignore EVERYTHING, then allow back only the two folders this image needs.
+*
+!docker/web/
+!app/public/

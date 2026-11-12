@@ -1,0 +1,10 @@
+# Files Docker should NOT send to the build ("build context").
+# Smaller context = faster builds, and secrets can't end up in an image.
+node_modules
+.data
+.env
+.env.*
+!.env.example
+npm-debug.log*
+Dockerfile
+.dockerignore

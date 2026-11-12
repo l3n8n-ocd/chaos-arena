@@ -193,3 +193,17 @@ test('the web page is served in development', async () => {
     assert.match(await res.text(), /<title>Chaos Arena<\/title>/);
   } finally { await t.close(); }
 });
+
+test('behind trusted proxies, each visitor gets their own rate limit', async () => {
+  // Simulates Docker: host Nginx -> web container (private IP) -> app.
+  const t = await startArena({ env: { WIN_AT: '1000', TRUST_PROXY: 'loopback, uniquelocal' } });
+  try {
+    const via = (client) => ({ 'X-Forwarded-For': `${client}, 172.18.0.1` });
+    for (let i = 0; i < 4; i += 1) {
+      assert.equal((await t.post('/api/pull', { team: 'red', count: 8, pid: PID }, via('203.0.113.10'))).status, 200);
+    }
+    assert.equal((await t.post('/api/pull', { team: 'red', count: 8, pid: PID }, via('203.0.113.10'))).status, 429);
+    // A different visitor (same player id, different real IP) is not blocked.
+    assert.equal((await t.post('/api/pull', { team: 'red', count: 8, pid: PID }, via('198.51.100.7'))).status, 200);
+  } finally { await t.close(); }
+});

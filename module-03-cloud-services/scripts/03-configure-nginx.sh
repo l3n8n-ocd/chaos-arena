@@ -71,6 +71,7 @@ if ! nginx -t; then
   exit 1
 fi
 systemctl reload nginx
+sleep 1   # the reload finishes in the background; give the new workers a moment
 
 echo
 echo "================ Step 3 complete ================"

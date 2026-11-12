@@ -171,7 +171,7 @@ function createArena({ config, game, store, backup, logger, crash, now = Date.no
   // ---------------------------------------------------------------------------
   const app = express();
   app.disable('x-powered-by'); // don't advertise the framework
-  app.set('trust proxy', 'loopback'); // Nginx (on this machine) tells us the visitor's real IP
+  app.set('trust proxy', config.trustProxy); // which proxies may tell us the visitor's real IP
   app.use(express.json({ limit: '1kb' })); // tiny request bodies only
 
   // While we are deliberately crashing, refuse new work.

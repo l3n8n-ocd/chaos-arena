@@ -170,9 +170,12 @@ else
 fi
 
 # Require IMDSv2 (the safer, token-based way for the server to fetch its role credentials).
+# Hop limit 2 (Module 04): a Docker container is one network "hop" further away
+# than the server itself, so with the default of 1 the app container could not
+# get its credentials. 2 allows exactly the container, nothing further.
 aws ec2 modify-instance-metadata-options --instance-id "$INSTANCE_ID" \
-  --http-tokens required --http-endpoint enabled >/dev/null
-echo "    Instance metadata service set to IMDSv2-only."
+  --http-tokens required --http-endpoint enabled --http-put-response-hop-limit 2 >/dev/null
+echo "    Instance metadata service set to IMDSv2-only (hop limit 2, for Docker)."
 
 # -----------------------------------------------------------------------------
 step "[4/4] CloudWatch log groups (cloud monitoring)..."

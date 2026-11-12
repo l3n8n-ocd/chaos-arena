@@ -1,0 +1,28 @@
+# =============================================================================
+# Chaos Arena — AWS server overrides (Module 04)
+#
+# Used ON TOP of compose.yaml, only on the EC2 server:
+#   docker compose -f compose.yaml -f compose.aws.yaml up -d
+# (the "arena" shortcut command on the server does this for you)
+#
+# Anything here replaces or extends the same setting in compose.yaml.
+# =============================================================================
+services:
+  app:
+    # Settings + secret from Module 03 (root-only file on the server, never in Git).
+    # Values in "environment:" (below and in compose.yaml) win over this file,
+    # which is why HOST=127.0.0.1 from the file doesn't apply inside Docker.
+    env_file:
+      - /etc/chaos-arena/chaos-arena.env
+    environment:
+      STORE: dynamo               # game data in DynamoDB, not in the local volume
+    # Send the app's logs straight to CloudWatch Logs. The Docker engine uses the
+    # server's IAM role for this; "docker compose logs" still works too.
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${AWS_REGION:?AWS_REGION must be set (the arena command sets it)}
+        awslogs-group: /chaos-arena/app
+        awslogs-stream: app-container
+        mode: non-blocking        # never slow the game down if CloudWatch is slow
+        max-buffer-size: 4m

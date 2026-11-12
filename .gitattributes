@@ -16,3 +16,6 @@ Dockerfile text eol=lf
 *.logrotate text eol=lf
 *.js        text eol=lf
 *.json      text eol=lf
+*.yaml      text eol=lf
+*.dockerignore text eol=lf
+module-04-docker/arena text eol=lf

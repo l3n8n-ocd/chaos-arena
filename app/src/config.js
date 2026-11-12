@@ -47,6 +47,11 @@ function loadConfig(env = process.env) {
     // Secret token for the admin "reset game" endpoint. Empty = endpoint disabled.
     adminToken: env.ADMIN_TOKEN || '',
 
+    // Which proxies in front of the app may tell us the visitor's real IP
+    // (X-Forwarded-For). "loopback" = Nginx on the same machine (Module 03).
+    // In Docker the proxy is another container, so add "uniquelocal" (private IPs).
+    trustProxy: env.TRUST_PROXY || 'loopback',
+
     // In production Nginx serves the web page; locally Express does it.
     serveStatic: (env.SERVE_STATIC || (env.NODE_ENV === 'production' ? 'false' : 'true')) === 'true',
   };
