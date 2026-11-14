@@ -1,0 +1,236 @@
+Chaos Arena — Module 04 verification report
+Generated: 2026-11-14 08:57:54 UTC
+
+=================== 1. DOCKER ENGINE ===================
+$ docker version --format 'Client {{.Client.Version}} | Engine {{.Server.Version}}' && docker compose version
+Client 29.9.3 | Engine 29.9.3
+Docker Compose version v5.7.1
+
+$ cat /etc/docker/daemon.json
+{
+  "log-driver": "json-file",
+  "log-opts": { "max-size": "10m", "max-file": "3" },
+  "live-restore": true
+}
+
+$ systemctl is-active docker && systemctl is-enabled docker
+active
+enabled
+
+# The ubuntu user is NOT in the docker group (docker access = root access):
+$ id -nG ubuntu | tr ' ' '\n' | grep -cx docker || true
+0
+
+
+=================== 2. IMAGES (Dockerfile -> image) ===================
+$ docker image ls --format 'table {{.Repository}}:{{.Tag}}\t{{.Size}}\t{{.CreatedSince}}' | grep -E 'REPOSITORY|chaos-arena'
+REPOSITORY:TAG                                     SIZE      CREATED
+chaos-arena-app:local                              274MB     21 minutes ago
+chaos-arena-web:local                              81.5MB    21 minutes ago
+
+# Layers of the app image (multi-stage build: only runtime files are shipped):
+$ docker history chaos-arena-app:local --format '{{.Size}}\t{{.CreatedBy}}' | head -n 10 | cut -c1-100
+0B	CMD ["node" "server.js"]
+0B	HEALTHCHECK {Test:[CMD node -e fetch('http:/…
+0B	EXPOSE [3000/tcp]
+0B	USER node
+8.19kB	RUN /bin/sh -c mkdir -p /data && chown node:…
+41kB	COPY public ./public # buildkit
+57.3kB	COPY src ./src # buildkit
+16.4kB	COPY package.json server.js ./ # buildkit
+32.3MB	COPY /app/node_modules ./node_modules # buil…
+8.19kB	WORKDIR /app
+
+$ docker image inspect chaos-arena-app:local --format 'User: {{.Config.User}} | Workdir: {{.Config.WorkingDir}} | Cmd: {{.Config.Cmd}}'
+User: node | Workdir: /app | Cmd: [node server.js]
+
+
+=================== 3. CONTAINERS (image -> running container) ===================
+$ arena ps 2>/dev/null
+NAME                IMAGE                   COMMAND                  SERVICE   CREATED          STATUS                    PORTS
+chaos-arena-app-1   chaos-arena-app:local   "docker-entrypoint.s…"   app       21 minutes ago   Up 5 minutes (healthy)    3000/tcp
+chaos-arena-web-1   chaos-arena-web:local   "/docker-entrypoint.…"   web       21 minutes ago   Up 21 minutes (healthy)   127.0.0.1:8080->8080/tcp
+
+$ docker inspect chaos-arena-app-1 chaos-arena-web-1 --format '{{.Name}}: health={{.State.Health.Status}} restartPolicy={{.HostConfig.RestartPolicy.Name}} restarts={{.RestartCount}} init={{.HostConfig.Init}} user={{.Config.User}}'
+/chaos-arena-app-1: health=healthy restartPolicy=unless-stopped restarts=2 init=true user=node
+/chaos-arena-web-1: health=healthy restartPolicy=unless-stopped restarts=0 init=<nil> user=101
+
+# Old Module 03 service is off (the containers replaced it):
+$ systemctl is-active chaos-arena; systemctl is-enabled chaos-arena
+inactive
+disabled
+
+
+=================== 4. HARDENING & RESOURCE QUOTAS ===================
+$ docker inspect chaos-arena-app-1 chaos-arena-web-1 --format '{{.Name}}: readOnlyRoot={{.HostConfig.ReadonlyRootfs}} capDrop={{.HostConfig.CapDrop}} securityOpt={{.HostConfig.SecurityOpt}}'
+/chaos-arena-app-1: readOnlyRoot=true capDrop=[ALL] securityOpt=[no-new-privileges:true]
+/chaos-arena-web-1: readOnlyRoot=true capDrop=[ALL] securityOpt=[no-new-privileges:true]
+
+$ docker inspect chaos-arena-app-1 chaos-arena-web-1 --format '{{.Name}}: memoryLimit={{.HostConfig.Memory}} nanoCpus={{.HostConfig.NanoCpus}} pidsLimit={{.HostConfig.PidsLimit}}'
+/chaos-arena-app-1: memoryLimit=314572800 nanoCpus=600000000 pidsLimit=100
+/chaos-arena-web-1: memoryLimit=67108864 nanoCpus=300000000 pidsLimit=50
+
+$ docker stats --no-stream --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.PIDs}}' chaos-arena-app-1 chaos-arena-web-1
+NAME                CPU %     MEM USAGE / LIMIT   PIDS
+chaos-arena-app-1   17.32%    28.42MiB / 300MiB   12
+chaos-arena-web-1   0.00%     4.926MiB / 64MiB    3
+
+# Writing to the app's code is impossible:
+$ docker exec chaos-arena-app-1 sh -c 'touch /app/hacked' || true
+touch: /app/hacked: Read-only file system
+
+
+=================== 5. CONTAINER NETWORKING ===================
+$ docker network ls --filter name=chaos-arena --format 'table {{.Name}}\t{{.Driver}}\t{{.Scope}}'
+NAME                    DRIVER    SCOPE
+chaos-arena_arena-net   bridge    local
+
+$ docker network inspect chaos-arena_arena-net --format '{{range .Containers}}{{.Name}} -> {{.IPv4Address}}{{println}}{{end}}'
+chaos-arena-web-1 -> 172.18.0.3/16
+chaos-arena-app-1 -> 172.18.0.2/16
+
+
+# Published ports: the app has NONE, web only on 127.0.0.1:
+$ docker port chaos-arena-app-1; echo '(app: nothing published)'; docker port chaos-arena-web-1
+(app: nothing published)
+8080/tcp -> 127.0.0.1:8080
+
+$ ss -tlnp | grep -E ':(3000|8080)\b' | awk '{print $4, $6}'
+127.0.0.1:8080 users:(("docker-proxy",pid=50376,fd=8))
+
+# The web container finds the app by its service name (Docker DNS):
+$ docker exec chaos-arena-web-1 nslookup app 127.0.0.11 2>/dev/null | grep -A1 'Name:'
+Name:	app
+Address: 172.18.0.2
+
+# From the host, the app's port 3000 is closed (only reachable inside Docker):
+$ curl -s -m 2 http://127.0.0.1:3000/api/health || echo 'connection refused: OK'
+connection refused: OK
+
+
+=================== 6. VOLUMES & PERSISTENT DATA ===================
+$ docker volume ls --filter name=chaos-arena
+DRIVER    VOLUME NAME
+local     chaos-arena_arena-data
+
+$ docker inspect chaos-arena-app-1 --format '{{range .Mounts}}{{.Type}} {{.Name}} -> {{.Destination}} (rw={{.RW}}){{println}}{{end}}'
+volume chaos-arena_arena-data -> /data (rw=true)
+
+
+# On AWS the game state lives in DynamoDB (outside the container), so the container itself is disposable:
+$ docker exec chaos-arena-app-1 printenv STORE TABLE_NAME
+dynamo
+chaos-arena
+
+
+=================== 7. ENVIRONMENT VARIABLES & SECRETS ===================
+# Variables inside the app container (secret hidden):
+$ docker exec chaos-arena-app-1 printenv | grep -E '^(NODE_ENV|HOST|PORT|STORE|AWS_REGION|TABLE_NAME|BUCKET_NAME|WIN_AT|CHAOS_COOLDOWN_SEC|TRUST_PROXY|ADMIN_TOKEN)=' | sed -E 's/^(ADMIN_TOKEN)=.*/\1=******** (hidden)/' | sort
+ADMIN_TOKEN=******** (hidden)
+AWS_REGION=ap-southeast-2
+BUCKET_NAME=chaos-arena-915059653170-ap-southeast-2
+CHAOS_COOLDOWN_SEC=60
+HOST=0.0.0.0
+NODE_ENV=production
+PORT=3000
+STORE=dynamo
+TABLE_NAME=chaos-arena
+TRUST_PROXY=loopback, uniquelocal
+WIN_AT=50
+
+# The secret comes from the root-only file, not from the image or Git:
+$ stat -c '%A %U:%G %n' /etc/chaos-arena/chaos-arena.env
+-rw------- root:root /etc/chaos-arena/chaos-arena.env
+
+$ docker history --no-trunc chaos-arena-app:local | grep -c ADMIN_TOKEN || true
+0
+
+# No AWS access keys: the container uses the server's IAM role:
+$ docker exec chaos-arena-app-1 printenv | grep -c AWS_ACCESS_KEY || true
+0
+
+
+=================== 8. LOGS ===================
+$ docker inspect chaos-arena-app-1 --format 'app log driver: {{.HostConfig.LogConfig.Type}} {{.HostConfig.LogConfig.Config}}'
+app log driver: awslogs map[awslogs-group:/chaos-arena/app awslogs-region:ap-southeast-2 awslogs-stream:app-container max-buffer-size:4m mode:non-blocking]
+
+$ docker inspect chaos-arena-web-1 --format 'web log driver: {{.HostConfig.LogConfig.Type}}'
+web log driver: json-file
+
+$ arena logs --no-log-prefix --tail 4 app 2>/dev/null | cut -c1-180
+{"time":"2026-11-14T08:52:54.214Z","level":"info","msg":"starting chaos arena","config":{"nodeEnv":"production","host":"0.0.0.0","port":3000,"store":"dynamo","dataFile":"/data/stor
+{"time":"2026-11-14T08:52:54.469Z","level":"info","msg":"recovered from crash","incident":"2026-11-14T08:52:53.242Z","recoveryMs":1218,"round":10}
+{"time":"2026-11-14T08:52:54.480Z","level":"info","msg":"listening","url":"http://0.0.0.0:3000","store":"dynamo"}
+{"time":"2026-11-14T08:52:54.570Z","level":"info","msg":"backup saved to S3","bucket":"chaos-arena-915059653170-ap-southeast-2","key":"incidents/2026-11-14T08-52-53-242Z.json"}
+
+
+=================== 9. LIVE WEB APPLICATION (HTTPS -> host Nginx -> web -> app) ===================
+$ curl -s --resolve chaos-arena.duckdns.org:443:127.0.0.1 https://chaos-arena.duckdns.org/health
+ok
+
+$ curl -s --resolve chaos-arena.duckdns.org:443:127.0.0.1 https://chaos-arena.duckdns.org/api/health
+{"status":"ok","uptimeSec":303,"store":"dynamo","bootId":"691028ad"}
+$ curl -s -m 10 --resolve chaos-arena.duckdns.org:443:127.0.0.1 https://chaos-arena.duckdns.org/api/status | pretty
+{
+  "status": "ok",
+  "checks": {
+    "database": {
+      "ok": true,
+      "kind": "dynamo",
+      "detail": "table chaos-arena is ACTIVE"
+    },
+    "storage": {
+      "ok": true,
+      "kind": "s3",
+      "detail": "bucket chaos-arena-915059653170-ap-southeast-2 is reachable"
+    }
+  },
+  "region": "ap-southeast-2",
+  "node": "v22.23.5",
+  "environment": "production",
+  "memoryMb": 77,
+  "uptimeSec": 303
+}
+
+$ curl -sI --resolve chaos-arena.duckdns.org:443:127.0.0.1 https://chaos-arena.duckdns.org/ | grep -Ei '^(HTTP|server|strict-transport|content-security|x-frame|x-content)'
+HTTP/1.1 200 OK
+Server: nginx
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Content-Security-Policy: default-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'
+Strict-Transport-Security: max-age=86400
+
+$ curl -s --resolve chaos-arena.duckdns.org:443:127.0.0.1 https://chaos-arena.duckdns.org/ | grep -o '<title>.*</title>'
+<title>Chaos Arena</title>
+
+
+=================== 10. CHAOS TEST (Docker restarts the crashed container) ===================
+Container restarts so far: 2
+$ curl -X POST https://chaos-arena.duckdns.org/api/chaos
+{"status":"crashing","incident":"2026-11-14T08:57:57.954Z","message":"Boom. Watch me heal."}
+
+RESULT: healed. Answering again 1472 ms after the CHAOS request.
+Container restarts now: 3
+
+# Docker's own event log (the container died with exit code 1, then started again):
+$ docker events --since 2026-11-14T08:57:57 --filter container=chaos-arena-app-1 --filter event=die --filter event=start
+
+# What the app recorded in DynamoDB:
+$ curl -s --resolve chaos-arena.duckdns.org:443:127.0.0.1 https://chaos-arena.duckdns.org/api/state | pretty | grep -A 7 '"chaos"'
+  "chaos": {
+    "total": 8,
+    "cooldownSec": 60,
+    "cooldownRemainingSec": 59,
+    "lastRecoveryMs": 1273,
+    "avgRecoveryMs": 2406,
+    "bestRecoveryMs": 1218
+  },
+
+$ arena logs --no-log-prefix --since 2m app 2>/dev/null | grep -E 'CHAOS|deliberate crash|recovered from crash|listening' | tail -n 4 | cut -c1-180
+{"time":"2026-11-14T08:57:57.984Z","level":"warn","msg":"CHAOS button pressed: crashing on purpose","incident":"2026-11-14T08:57:57.954Z","round":10}
+{"time":"2026-11-14T08:57:58.136Z","level":"error","msg":"process exiting with code 1 (deliberate crash)"}
+{"time":"2026-11-14T08:57:59.233Z","level":"info","msg":"recovered from crash","incident":"2026-11-14T08:57:57.954Z","recoveryMs":1273,"round":10}
+{"time":"2026-11-14T08:57:59.243Z","level":"info","msg":"listening","url":"http://0.0.0.0:3000","store":"dynamo"}
+
+
+=================== END OF REPORT ===================
