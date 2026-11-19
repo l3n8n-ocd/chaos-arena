@@ -1,0 +1,207 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <title>Chaos Arena architecture</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#c9cfdb"/>
+    </marker>
+    <marker id="arrowA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#ffb020"/>
+    </marker>
+    <style>
+      .box   { fill: #161a22; stroke: #2f3646; stroke-width: 1.5; rx: 10; }
+      .inner { fill: #1d222d; stroke: #384052; stroke-width: 1.2; rx: 8; }
+      .h     { fill: #e8eaf0; font-size: 17px; font-weight: 700; }
+      .t     { fill: #e8eaf0; font-size: 14px; font-weight: 600; }
+      .s     { fill: #9aa2b4; font-size: 12.5px; }
+      .lbl   { fill: #c9cfdb; font-size: 12px; font-weight: 600; }
+      .lblA  { fill: #ffb020; font-size: 12px; font-weight: 600; }
+      .line  { stroke: #c9cfdb; stroke-width: 1.6; fill: none; marker-end: url(#arrow); }
+      .lineA { stroke: #ffb020; stroke-width: 1.8; fill: none; stroke-dasharray: 6 5; marker-end: url(#arrowA); }
+    </style>
+  </defs>
+
+  <rect width="1600" height="900" fill="#0d0f14"/>
+
+  <!-- ================= Title ================= -->
+  <text x="30" y="44" font-size="28" font-weight="800"><tspan fill="#ff4d5e">Chaos</tspan><tspan fill="#3d8bff"> Arena</tspan></text>
+  <text x="30" y="68" class="s">A multiplayer tug-of-war you're allowed to crash, and it heals itself.</text>
+
+  <!-- ================= Left: players ================= -->
+  <rect x="30" y="110" width="300" height="80" class="box" stroke="#3d8bff"/>
+  <text x="50" y="140" class="h">Players</text>
+  <text x="50" y="162" class="s">browser or phone</text>
+  <text x="50" y="180" class="s">chaos-arena.duckdns.org</text>
+
+  <rect x="30" y="215" width="300" height="78" class="inner"/>
+  <text x="50" y="242" class="t">DuckDNS + Let's Encrypt</text>
+  <text x="50" y="262" class="s">free domain → Elastic IP</text>
+  <text x="50" y="280" class="s">free HTTPS certificate, auto-renewed</text>
+
+  <!-- Self-healing ladder -->
+  <rect x="30" y="330" width="300" height="400" class="box"/>
+  <text x="50" y="360" class="h">Self-healing, layer by layer</text>
+  <text x="50" y="392" class="t" fill="#33d17a">App crashes (CHAOS)</text>
+  <text x="50" y="410" class="s">Docker restart policy · ~1 s</text>
+  <text x="50" y="440" class="t" fill="#33d17a">App frozen but running</text>
+  <text x="50" y="458" class="s">health check → deploy agent · &lt; 2 min</text>
+  <text x="50" y="488" class="t" fill="#33d17a">Broken release</text>
+  <text x="50" y="506" class="s">health-gated → automatic rollback</text>
+  <text x="50" y="536" class="t" fill="#33d17a">Web container down</text>
+  <text x="50" y="554" class="s">host Nginx serves a fallback page</text>
+  <text x="50" y="584" class="t" fill="#33d17a">OS hung / AWS hardware</text>
+  <text x="50" y="602" class="s">CloudWatch alarm → reboot / recover</text>
+  <text x="50" y="632" class="t" fill="#33d17a">Site unreachable</text>
+  <text x="50" y="650" class="s">uptime check → email to me</text>
+  <text x="50" y="690" class="s">Game state lives in DynamoDB, so any</text>
+  <text x="50" y="708" class="s">container can die without losing a point.</text>
+
+  <!-- ================= Middle: AWS ================= -->
+  <rect x="370" y="90" width="830" height="780" rx="14" fill="none" stroke="#ff9900" stroke-width="2" stroke-dasharray="8 6"/>
+  <text x="392" y="118" class="h" fill="#ff9900">AWS · ap-southeast-2 (Sydney)</text>
+
+  <!-- EC2 -->
+  <rect x="392" y="135" width="485" height="600" class="box" stroke="#3d8bff"/>
+  <text x="412" y="163" class="h">EC2 t3.micro · Ubuntu 24.04</text>
+  <text x="412" y="183" class="s">security group 22 (my IP) / 80 / 443 · UFW · fail2ban · key-only SSH</text>
+
+  <rect x="412" y="200" width="445" height="62" class="inner"/>
+  <text x="430" y="226" class="t">host Nginx</text>
+  <text x="430" y="246" class="s">HTTPS · HTTP→HTTPS redirect · rate limit 100 req/s per IP</text>
+
+  <rect x="412" y="282" width="445" height="215" rx="10" fill="#141922" stroke="#2496ed" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="430" y="306" class="t" fill="#2496ed">Docker Compose · network arena-net</text>
+
+  <rect x="430" y="320" width="190" height="92" class="inner"/>
+  <text x="446" y="345" class="t">web container</text>
+  <text x="446" y="365" class="s">Nginx (non-root)</text>
+  <text x="446" y="383" class="s">page + /api → app:3000</text>
+  <text x="446" y="401" class="s">127.0.0.1:8080 only</text>
+
+  <rect x="650" y="320" width="190" height="92" class="inner" stroke="#ff4d5e"/>
+  <text x="666" y="345" class="t">app container</text>
+  <text x="666" y="365" class="s">Node.js 22 + Express</text>
+  <text x="666" y="383" class="s">read-only · non-root</text>
+  <text x="666" y="401" class="s">restart: unless-stopped</text>
+
+  <rect x="650" y="428" width="190" height="52" class="inner"/>
+  <text x="666" y="451" class="t">volume arena-data</text>
+  <text x="666" y="469" class="s">local mode only</text>
+
+  <text x="430" y="451" class="s">health checks every 10 s</text>
+  <text x="430" y="469" class="s">CPU / memory / process limits</text>
+
+  <rect x="412" y="517" width="215" height="88" class="inner"/>
+  <text x="428" y="542" class="t">CloudWatch agent</text>
+  <text x="428" y="562" class="s">ships Nginx + deploy</text>
+  <text x="428" y="580" class="s">logs to CloudWatch</text>
+
+  <rect x="642" y="517" width="215" height="88" class="inner" stroke="#ffb020"/>
+  <text x="658" y="542" class="t">deploy agent</text>
+  <text x="658" y="562" class="s">systemd timer, every minute</text>
+  <text x="658" y="580" class="s">pull · deploy · verify</text>
+  <text x="658" y="597" class="s">roll back · heal frozen apps</text>
+
+  <rect x="412" y="625" width="445" height="92" class="inner" stroke="#33d17a"/>
+  <text x="430" y="651" class="t">IAM role chaos-arena-ec2-role</text>
+  <text x="430" y="671" class="s">least privilege: one table, one bucket, its own logs</text>
+  <text x="430" y="689" class="s">temporary credentials via IMDSv2 (hop limit 2)</text>
+  <text x="430" y="707" class="s">no AWS access keys anywhere</text>
+
+  <!-- AWS managed services -->
+  <rect x="910" y="135" width="270" height="88" class="box" stroke="#3d8bff"/>
+  <text x="928" y="162" class="t">DynamoDB (managed DB)</text>
+  <text x="928" y="182" class="s">table chaos-arena</text>
+  <text x="928" y="200" class="s">game state · rounds · incidents</text>
+
+  <rect x="910" y="238" width="270" height="88" class="box" stroke="#3d8bff"/>
+  <text x="928" y="265" class="t">S3 (object storage)</text>
+  <text x="928" y="285" class="s">private · encrypted · 90-day cleanup</text>
+  <text x="928" y="303" class="s">score backups · incident reports</text>
+
+  <rect x="910" y="341" width="270" height="150" class="box" stroke="#3d8bff"/>
+  <text x="928" y="368" class="t">CloudWatch (monitoring)</text>
+  <text x="928" y="390" class="s">logs: /chaos-arena/app, /nginx</text>
+  <text x="928" y="410" class="s">7 metric filters (recovery time,</text>
+  <text x="928" y="428" class="s">crashes, errors, deploys, rollbacks…)</text>
+  <text x="928" y="448" class="s">7 alarms · dashboard</text>
+  <text x="928" y="468" class="s">EC2 auto-recover / auto-reboot</text>
+
+  <rect x="910" y="506" width="270" height="62" class="box" stroke="#3d8bff"/>
+  <text x="928" y="532" class="t">SNS</text>
+  <text x="928" y="552" class="s">alarm emails to me</text>
+
+  <rect x="392" y="752" width="485" height="98" class="inner"/>
+  <text x="412" y="778" class="t">AWS CloudShell (infrastructure as scripts)</text>
+  <text x="412" y="798" class="s">setup-aws.sh: table, bucket, role, log groups</text>
+  <text x="412" y="816" class="s">setup-monitoring.sh: filters, alarms, email, dashboard</text>
+  <text x="412" y="834" class="s">teardown-aws.sh: delete it all</text>
+
+  <rect x="910" y="752" width="270" height="98" class="inner"/>
+  <text x="928" y="778" class="t">Cost</text>
+  <text x="928" y="798" class="s">AWS free plan credits</text>
+  <text x="928" y="816" class="s">DynamoDB 5/5 units, KBs in S3,</text>
+  <text x="928" y="834" class="s">14-day log retention</text>
+
+  <!-- ================= Right: GitHub ================= -->
+  <rect x="1230" y="20" width="340" height="62" class="box" stroke="#ff4d5e"/>
+  <text x="1250" y="46" class="t">Me (developer)</text>
+  <text x="1250" y="66" class="s">git push · pull requests</text>
+
+  <rect x="1230" y="105" width="340" height="765" rx="14" fill="none" stroke="#8b949e" stroke-width="2" stroke-dasharray="8 6"/>
+  <text x="1250" y="133" class="h" fill="#c9cfdb">GitHub</text>
+
+  <rect x="1250" y="148" width="300" height="70" class="inner"/>
+  <text x="1266" y="173" class="t">Repository</text>
+  <text x="1266" y="193" class="s">main · pull requests · Dependabot</text>
+  <text x="1266" y="209" class="s">tags module-02 … module-06</text>
+
+  <rect x="1250" y="238" width="300" height="250" class="box" stroke="#33d17a"/>
+  <text x="1266" y="264" class="t">GitHub Actions: CI/CD</text>
+  <text x="1266" y="292" class="lbl">1  test</text>
+  <text x="1290" y="310" class="s">26 unit + API tests</text>
+  <text x="1266" y="334" class="lbl">2  lint</text>
+  <text x="1290" y="352" class="s">ShellCheck · Compose validation</text>
+  <text x="1266" y="376" class="lbl">3  build + integration test</text>
+  <text x="1290" y="394" class="s">real containers, real CHAOS crash</text>
+  <text x="1266" y="418" class="lbl">4  publish images (main)</text>
+  <text x="1266" y="442" class="lbl">5  deploy check</text>
+  <text x="1290" y="460" class="s">waits until the live site runs</text>
+  <text x="1290" y="477" class="s">this commit, then smoke-tests it</text>
+
+  <rect x="1250" y="508" width="300" height="80" class="inner" stroke="#ffb020"/>
+  <text x="1266" y="534" class="t">GitHub Container Registry</text>
+  <text x="1266" y="554" class="s">chaos-arena-app / chaos-arena-web</text>
+  <text x="1266" y="572" class="s">tagged :sha-&lt;commit&gt; and :main</text>
+
+  <rect x="1250" y="608" width="300" height="70" class="inner"/>
+  <text x="1266" y="634" class="t">Uptime check</text>
+  <text x="1266" y="654" class="s">scheduled, twice an hour, from outside</text>
+
+  <rect x="1250" y="698" width="300" height="152" class="inner"/>
+  <text x="1266" y="724" class="t">Environments</text>
+  <text x="1266" y="746" class="s">local: docker compose up (volume)</text>
+  <text x="1266" y="766" class="s">CI: GitHub runner (throw-away)</text>
+  <text x="1266" y="786" class="s">production: EC2 + DynamoDB + S3</text>
+  <text x="1266" y="812" class="s">same images everywhere;</text>
+  <text x="1266" y="830" class="s">only configuration differs</text>
+
+  <!-- ================= Arrows ================= -->
+  <path d="M330,160 C370,160 380,231 410,231" class="line"/>
+  <text x="340" y="212" class="lbl">HTTPS</text>
+
+  <path d="M815,262 L815,280" class="line"/>
+  <path d="M620,366 L648,366" class="line"/>
+  
+  <path d="M840,345 C880,345 880,180 908,180" class="line"/>
+  <path d="M840,380 C885,380 885,282 908,282" class="line"/>
+  <path d="M857,470 C885,470 885,420 908,420" class="line"/>
+  <text x="864" y="492" class="lbl">logs</text>
+  <path d="M1045,491 L1045,504" class="line"/>
+
+  <path d="M1400,82 L1400,146" class="line"/>
+  <path d="M1400,218 L1400,236" class="line"/>
+  <path d="M1400,488 L1400,506" class="line"/>
+
+  <path d="M1250,548 C1210,548 1210,585 1190,585 L862,585" class="lineA"/>
+  <text x="900" y="604" class="lblA">deploy agent pulls new images (every minute)</text>
+</svg>
