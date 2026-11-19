@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+# =============================================================================
+# arena-deploy — the server's deploy agent (Module 05)
+# Installed to /usr/local/bin/arena-deploy; run every minute by arena-deploy.timer.
+#
+# Each run:
+#   1. HEAL:   restarts any container Docker reports as "unhealthy" (frozen or
+#              broken but not crashed: the gap a restart policy can't cover)
+#   2. CHECK:  asks GitHub Container Registry which commit ":main" points to
+#   3. DEPLOY: if that commit isn't running yet, switches both containers to it
+#   4. VERIFY: waits until the new containers are healthy and report the new
+#              version; if not, ROLLS BACK to the previous version by itself
+#
+# This is a "pull" deployment: the server fetches new versions. GitHub needs
+# no SSH access and no AWS keys.
+#
+# Every event is written as one JSON line to /srv/chaos-arena/logs/deploy.log,
+# which the CloudWatch agent ships to CloudWatch (alarms + dashboard).
+# =============================================================================
+set -uo pipefail
+
+REGISTRY="${ARENA_REGISTRY:-ghcr.io/l3n8n-ocd}"   # ARENA_REGISTRY: only for testing
+APP_REPO="$REGISTRY/chaos-arena-app"
+WEB_REPO="$REGISTRY/chaos-arena-web"
+STATE_DIR="/var/lib/chaos-arena"
+TAG_FILE="$STATE_DIR/deployed-tag"     # tag currently deployed, e.g. sha-1a2b3c4
+BAD_FILE="$STATE_DIR/bad-tags"         # tags that failed and were rolled back
+LOG_FILE="/srv/chaos-arena/logs/deploy.log"
+HEALTH_URL="http://127.0.0.1:8080/api/health"
+HEALTH_TIMEOUT_SEC=120
+
+log() {  # level event message [key=value ...]
+  local level="$1" event="$2" msg="$3"; shift 3
+  local line extra=""
+  for kv in "$@"; do extra+=",\"${kv%%=*}\":\"${kv#*=}\""; done
+  line="{\"time\":\"$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)\",\"level\":\"$level\",\"source\":\"arena-deploy\",\"event\":\"$event\",\"msg\":\"$msg\"$extra}"
+  echo "$line" >> "$LOG_FILE"
+  echo "$line"
+}
+
+revision_of() { docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$1" 2>/dev/null; }
+health_of()   { docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$1" 2>/dev/null || echo missing; }
+
+# Only one run at a time (a deploy can take longer than a minute).
+mkdir -p "$STATE_DIR"
+exec 9>"$STATE_DIR/.lock"
+flock -n 9 || exit 0
+
+# -----------------------------------------------------------------------------
+# 1. HEAL frozen / broken containers
+# -----------------------------------------------------------------------------
+for ctr in chaos-arena-app-1 chaos-arena-web-1; do
+  if [[ "$(health_of "$ctr")" == "unhealthy" ]]; then
+    log warn container_healed "container was unhealthy, restarting it" container="$ctr"
+    docker unpause "$ctr" >/dev/null 2>&1 || true
+    docker restart "$ctr" >/dev/null
+  fi
+done
+
+# -----------------------------------------------------------------------------
+# 2. CHECK the registry for a new version
+# -----------------------------------------------------------------------------
+if ! docker pull -q "$APP_REPO:main" >/dev/null 2>&1 || ! docker pull -q "$WEB_REPO:main" >/dev/null 2>&1; then
+  # Log this at most once an hour, so a registry hiccup doesn't flood the logs.
+  if [[ ! -f "$STATE_DIR/.pull-warned" || -n "$(find "$STATE_DIR/.pull-warned" -mmin +60)" ]]; then
+    log warn registry_unreachable "cannot pull images from ghcr.io (are the packages public?)"
+    touch "$STATE_DIR/.pull-warned"
+  fi
+  exit 0
+fi
+rm -f "$STATE_DIR/.pull-warned"
+
+APP_REV="$(revision_of "$APP_REPO:main")"
+WEB_REV="$(revision_of "$WEB_REPO:main")"
+# Both images come from the same pipeline run; wait until both are published.
+[[ -n "$APP_REV" && "$APP_REV" == "$WEB_REV" ]] || exit 0
+
+NEW_TAG="sha-${APP_REV:0:7}"
+CURRENT_TAG="$(cat "$TAG_FILE" 2>/dev/null || true)"
+[[ "$NEW_TAG" == "$CURRENT_TAG" ]] && exit 0                     # already running
+grep -qx "$NEW_TAG" "$BAD_FILE" 2>/dev/null && exit 0           # failed before, don't retry
+
+# -----------------------------------------------------------------------------
+# 3. DEPLOY
+# -----------------------------------------------------------------------------
+START=$(date +%s)
+log info deploy_started "deploying a new version" previous="${CURRENT_TAG:-local-build}" version="$NEW_TAG" commit="$APP_REV"
+docker pull -q "$APP_REPO:$NEW_TAG" >/dev/null && docker pull -q "$WEB_REPO:$NEW_TAG" >/dev/null || {
+  log warn deploy_failed "could not pull the sha-tagged images" version="$NEW_TAG"; exit 1; }
+
+APP_IMAGE="$APP_REPO:$NEW_TAG" WEB_IMAGE="$WEB_REPO:$NEW_TAG" \
+  arena up -d --no-build --remove-orphans >/dev/null 2>&1
+
+# -----------------------------------------------------------------------------
+# 4. VERIFY (or roll back)
+# -----------------------------------------------------------------------------
+OK=0
+for _ in $(seq 1 "$HEALTH_TIMEOUT_SEC"); do
+  if [[ "$(health_of chaos-arena-app-1)" == healthy && "$(health_of chaos-arena-web-1)" == healthy ]] &&
+     curl -sf -m 2 "$HEALTH_URL" | grep -q "\"version\":\"$APP_REV\""; then
+    OK=1; break
+  fi
+  # Crashing over and over on start? No need to wait the full timeout.
+  if [[ "$(docker inspect -f '{{.RestartCount}}' chaos-arena-app-1 2>/dev/null || echo 0)" -ge 3 ]]; then
+    break
+  fi
+  sleep 1
+done
+
+if [[ "$OK" -eq 1 ]]; then
+  echo "$NEW_TAG" > "$TAG_FILE"
+  log info deploy_succeeded "new version is live" version="$NEW_TAG" commit="$APP_REV" seconds="$(( $(date +%s) - START ))"
+  # Housekeeping: keep only the 3 newest versions of each image on disk.
+  for repo in "$APP_REPO" "$WEB_REPO"; do
+    docker image ls "$repo" --format '{{.Tag}}' | grep '^sha-' | tail -n +4 |
+      while read -r old; do docker image rm "$repo:$old" >/dev/null 2>&1 || true; done
+  done
+  docker image prune -f >/dev/null 2>&1 || true
+  exit 0
+fi
+
+# Rollback: back to the previous published version, or to the local Module 04 build.
+echo "$NEW_TAG" >> "$BAD_FILE"
+if [[ -n "$CURRENT_TAG" ]]; then
+  PREV_APP="$APP_REPO:$CURRENT_TAG"; PREV_WEB="$WEB_REPO:$CURRENT_TAG"
+else
+  PREV_APP="chaos-arena-app:local"; PREV_WEB="chaos-arena-web:local"
+fi
+APP_IMAGE="$PREV_APP" WEB_IMAGE="$PREV_WEB" arena up -d --no-build --remove-orphans >/dev/null 2>&1
+log warn deploy_rolled_back "new version was unhealthy, rolled back" version="$NEW_TAG" restored="${CURRENT_TAG:-local-build}"
+exit 1

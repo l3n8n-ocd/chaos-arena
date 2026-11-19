@@ -148,7 +148,7 @@ function createArena({ config, game, store, backup, logger, crash, now = Date.no
       roundStartedAt: s.roundStartedAt,
       lastRound,
       players: countPlayers(),
-      server: { bootId, startedAt, uptimeSec: Math.floor((now() - startedAt) / 1000), now: now() },
+      server: { version: config.version, bootId, startedAt, uptimeSec: Math.floor((now() - startedAt) / 1000), now: now() },
       chaos: chaosStats(),
       incidents: incidents.slice(0, 5).map((i) => ({
         id: i.id,
@@ -182,7 +182,13 @@ function createArena({ config, game, store, backup, logger, crash, now = Date.no
   });
 
   app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', uptimeSec: Math.floor((now() - startedAt) / 1000), store: store.kind, bootId });
+    res.json({
+      status: 'ok',
+      version: config.version,
+      uptimeSec: Math.floor((now() - startedAt) / 1000),
+      store: store.kind,
+      bootId,
+    });
   });
 
   // Deep check. Cached for 5 s so it can't be used to hammer AWS.
@@ -202,6 +208,7 @@ function createArena({ config, game, store, backup, logger, crash, now = Date.no
     const body = {
       status: database.ok && storage.ok ? 'ok' : 'degraded',
       checks: { database, storage },
+      version: config.version,
       region: config.region || '(local)',
       node: process.version,
       environment: config.nodeEnv,

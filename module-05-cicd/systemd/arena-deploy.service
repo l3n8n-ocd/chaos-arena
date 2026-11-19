@@ -1,0 +1,14 @@
+# Chaos Arena deploy agent (Module 05): one run = heal + check + deploy/rollback.
+# Installed to /etc/systemd/system/ by scripts/01-install-deploy-agent.sh
+[Unit]
+Description=Chaos Arena deploy agent (pull new images, deploy, roll back, heal)
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/arena-deploy
+TimeoutStartSec=10min
+# A failed deploy is already handled (rolled back + logged); don't treat it as a unit failure storm.
+SuccessExitStatus=1

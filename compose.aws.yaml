@@ -9,6 +9,10 @@
 # =============================================================================
 services:
   app:
+    # Module 05: which image to run. The "arena" command sets APP_IMAGE to the
+    # image the CI/CD pipeline published (ghcr.io/...:sha-xxxxxxx); without it,
+    # the locally built image from Module 04 is used.
+    image: ${APP_IMAGE:-chaos-arena-app:local}
     # Settings + secret from Module 03 (root-only file on the server, never in Git).
     # Values in "environment:" (below and in compose.yaml) win over this file,
     # which is why HOST=127.0.0.1 from the file doesn't apply inside Docker.
@@ -26,3 +30,6 @@ services:
         awslogs-stream: app-container
         mode: non-blocking        # never slow the game down if CloudWatch is slow
         max-buffer-size: 4m
+
+  web:
+    image: ${WEB_IMAGE:-chaos-arena-web:local}

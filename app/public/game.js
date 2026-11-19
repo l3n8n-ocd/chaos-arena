@@ -21,7 +21,7 @@
     joinRed: $('join-red'), joinBlue: $('join-blue'), pull: $('pull'), players: $('players'),
     chaos: $('chaos'),
     uptime: $('stat-uptime'), crashes: $('stat-crashes'), last: $('stat-last'), avg: $('stat-avg'),
-    incidents: $('incidents'),
+    incidents: $('incidents'), build: $('build'),
   };
 
   // ---- small helpers --------------------------------------------------------
@@ -142,6 +142,11 @@
 
     const p = s.players;
     el.players.textContent = `${p.total} player${p.total === 1 ? '' : 's'} (${p.red} red, ${p.blue} blue)`;
+
+    if (s.server.version && el.build.dataset.v !== s.server.version) {
+      el.build.dataset.v = s.server.version;
+      el.build.textContent = `· build ${s.server.version.slice(0, 7)}`;
+    }
 
     el.crashes.textContent = s.chaos.total;
     el.last.textContent = formatMs(s.chaos.lastRecoveryMs);

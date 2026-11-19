@@ -24,6 +24,15 @@ if [[ $EUID -ne 0 ]]; then exec sudo "$0" "$@"; fi
 AWS_REGION="$(grep -E '^AWS_REGION=' "$ENV_FILE" | cut -d= -f2-)"
 export AWS_REGION
 
+# Module 05: if the deploy agent has deployed a published image, use it.
+# (APP_IMAGE / WEB_IMAGE already set by the caller win, e.g. during a deploy.)
+DEPLOYED_TAG_FILE="/var/lib/chaos-arena/deployed-tag"
+REGISTRY="${ARENA_REGISTRY:-ghcr.io/l3n8n-ocd}"   # ARENA_REGISTRY: only for testing
+if [[ -z "${APP_IMAGE:-}" && -s "$DEPLOYED_TAG_FILE" ]]; then
+  TAG="$(cat "$DEPLOYED_TAG_FILE")"
+  export APP_IMAGE="$REGISTRY/chaos-arena-app:$TAG" WEB_IMAGE="$REGISTRY/chaos-arena-web:$TAG"
+fi
+
 CMD=(docker compose --project-directory "$REPO_DIR" -f "$REPO_DIR/compose.yaml" -f "$REPO_DIR/compose.aws.yaml")
 echo "+ ${CMD[*]} $*" >&2
 exec "${CMD[@]}" "$@"

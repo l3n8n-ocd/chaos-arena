@@ -27,6 +27,8 @@ function loadConfig(env = process.env) {
   }
 
   const config = {
+    // Which build is running: the Git commit, baked into the image by CI (Module 05).
+    version: env.BUILD_SHA || 'dev',
     nodeEnv: env.NODE_ENV || 'development',
     host: env.HOST || '127.0.0.1',
     port: readInt(env, 'PORT', 3000, 1, 65535),

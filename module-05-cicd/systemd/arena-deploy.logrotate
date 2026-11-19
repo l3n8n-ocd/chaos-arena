@@ -1,0 +1,10 @@
+# Installed to /etc/logrotate.d/arena-deploy (Module 05)
+/srv/chaos-arena/logs/deploy.log {
+    weekly
+    rotate 8
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}

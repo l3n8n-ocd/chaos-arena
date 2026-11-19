@@ -25,6 +25,10 @@ COPY docker/web/nginx.conf /etc/nginx/conf.d/default.conf
 # The game's web page (HTML, CSS, JavaScript) is baked into the image.
 COPY app/public /usr/share/nginx/html
 
+# Which Git commit this image was built from (set by the CI/CD pipeline, Module 05).
+ARG BUILD_SHA=dev
+LABEL org.opencontainers.image.revision=${BUILD_SHA}
+
 EXPOSE 8080
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \

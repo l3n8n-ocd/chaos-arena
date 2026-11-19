@@ -207,3 +207,13 @@ test('behind trusted proxies, each visitor gets their own rate limit', async () 
     assert.equal((await t.post('/api/pull', { team: 'red', count: 8, pid: PID }, via('198.51.100.7'))).status, 200);
   } finally { await t.close(); }
 });
+
+test('health reports which build is running', async () => {
+  const t = await startArena({ env: { BUILD_SHA: 'abc1234def5678' } });
+  try {
+    assert.equal((await t.get('/api/health')).data.version, 'abc1234def5678');
+    assert.equal((await t.get('/api/state')).data.server.version, 'abc1234def5678');
+  } finally { await t.close(); }
+  const local = await startArena();
+  try { assert.equal((await local.get('/api/health')).data.version, 'dev'); } finally { await local.close(); }
+});

@@ -19,3 +19,5 @@ Dockerfile text eol=lf
 *.yaml      text eol=lf
 *.dockerignore text eol=lf
 module-04-docker/arena text eol=lf
+module-05-cicd/arena-deploy text eol=lf
+*.timer text eol=lf

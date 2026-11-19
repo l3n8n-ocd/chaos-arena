@@ -1,0 +1,46 @@
+# =============================================================================
+# Chaos Arena — uptime check (Module 05: monitoring)
+#
+# Every 30 minutes, a GitHub server somewhere else on the internet checks the
+# live site, like a real visitor would ("synthetic monitoring").
+# If it fails, the run goes red and GitHub emails the repository owner.
+# =============================================================================
+name: Uptime check
+
+on:
+  schedule:
+    - cron: "17,47 * * * *"     # twice an hour (GitHub may start it a few minutes late)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      URL: https://chaos-arena.duckdns.org
+    steps:
+      - name: Check the live site
+        run: |
+          set -euo pipefail
+          check() {  # name, path, text that must appear
+            local start end body
+            start=$(date +%s%3N)
+            body="$(curl -sf -m 15 --retry 2 --retry-delay 10 "$URL$2")" || { echo "::error::$1 is DOWN ($URL$2)"; return 1; }
+            end=$(date +%s%3N)
+            grep -q "$3" <<<"$body" || { echo "::error::$1 answered but looks wrong: $body"; return 1; }
+            echo "| $1 | ✅ up | $((end - start)) ms |" >> "$GITHUB_STEP_SUMMARY"
+          }
+          echo "| Check | Status | Response time |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          check "Web page"             "/"            "<title>Chaos Arena</title>"
+          check "Game API"             "/api/health"  '"status":"ok"'
+          check "Database + storage"   "/api/status"  '"status":"ok"'
+          echo
+          curl -s -m 15 "$URL/api/state" | node -e '
+            let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>{
+              const d=JSON.parse(s);
+              console.log(`Build ${String(d.server.version).slice(0,7)} | up ${d.server.uptimeSec}s | crashes survived ${d.chaos.total} | avg recovery ${d.chaos.avgRecoveryMs} ms`);
+            })' | tee -a "$GITHUB_STEP_SUMMARY"

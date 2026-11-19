@@ -66,6 +66,12 @@ COPY public ./public
 # /data is where STORE=file keeps the game (mounted as a volume).
 RUN mkdir -p /data && chown node:node /data
 
+# Which Git commit this image was built from (set by the CI/CD pipeline, Module 05).
+# Kept near the end so changing it doesn't invalidate the cached layers above.
+ARG BUILD_SHA=dev
+ENV BUILD_SHA=${BUILD_SHA}
+LABEL org.opencontainers.image.revision=${BUILD_SHA}
+
 # Never run as root: the official Node image includes a "node" user.
 USER node
 

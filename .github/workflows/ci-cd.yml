@@ -1,0 +1,192 @@
+# =============================================================================
+# Chaos Arena — CI/CD pipeline (Module 05)
+#
+#   push / pull request
+#     ├─ test ............ unit + API tests (Node.js)
+#     ├─ lint ............ shell scripts + Compose files
+#     └─ build ........... Docker images  ->  integration test (incl. a real CHAOS crash)
+#           └─ (main only) publish images to GitHub Container Registry
+#                 └─ deploy ... the server's deploy agent pulls the new images;
+#                               this job waits until the live site runs this commit
+#
+# Pull requests run everything except publish + deploy.
+# =============================================================================
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Least privilege: jobs only get extra permissions where they need them.
+permissions:
+  contents: read
+
+# Never run two deploys at once; a newer PR run cancels an older one.
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  REGISTRY: ghcr.io/${{ github.repository_owner }}
+  LIVE_URL: https://chaos-arena.duckdns.org
+
+jobs:
+  # ---------------------------------------------------------------------------
+  test:
+    name: Test (Node.js)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Install dependencies (exact versions from package-lock.json)
+        run: npm ci --no-audit --no-fund
+      - name: Run the tests
+        run: npm test
+
+  # ---------------------------------------------------------------------------
+  lint:
+    name: Lint (scripts + Compose)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ShellCheck every shell script
+        run: |
+          shellcheck --version | head -n 2
+          git ls-files '*.sh' module-04-docker/arena | xargs shellcheck -S warning
+      - name: Validate the Compose files
+        run: |
+          docker compose -f compose.yaml config --quiet
+          # The server override needs its settings file; use a dummy one here.
+          sudo mkdir -p /etc/chaos-arena
+          echo "AWS_REGION=ap-southeast-2" | sudo tee /etc/chaos-arena/chaos-arena.env >/dev/null
+          AWS_REGION=ap-southeast-2 docker compose -f compose.yaml -f compose.aws.yaml config --quiet
+          echo "Compose files are valid."
+
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build, integration test & publish
+    runs-on: ubuntu-latest
+    needs: [test, lint]
+    permissions:
+      contents: read
+      packages: write          # to push images to ghcr.io (main only)
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Work out image names
+        id: meta
+        run: |
+          SHORT="${GITHUB_SHA::7}"
+          echo "tag=sha-$SHORT" >> "$GITHUB_OUTPUT"
+          echo "### Build \`sha-$SHORT\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Step | Result |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build the app image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./app
+          target: runtime
+          build-args: BUILD_SHA=${{ github.sha }}
+          load: true            # keep it in the runner's Docker for the integration test
+          tags: |
+            chaos-arena-app:local
+            ${{ env.REGISTRY }}/chaos-arena-app:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/chaos-arena-app:main
+          cache-from: type=gha,scope=app
+          cache-to: type=gha,scope=app,mode=max
+
+      - name: Build the web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/web/Dockerfile
+          build-args: BUILD_SHA=${{ github.sha }}
+          load: true
+          tags: |
+            chaos-arena-web:local
+            ${{ env.REGISTRY }}/chaos-arena-web:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/chaos-arena-web:main
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+
+      - name: Image sizes
+        run: docker image ls --format '{{.Repository}}:{{.Tag}}  {{.Size}}' | grep chaos-arena-.*:local
+
+      - name: Integration test (real containers, real CHAOS crash)
+        env:
+          EXPECTED_VERSION: ${{ github.sha }}
+        run: scripts/ci/integration-test.sh
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}   # temporary token, created for this run only
+
+      - name: Publish images
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          for image in chaos-arena-app chaos-arena-web; do
+            # The immutable sha tag first, then move "main" to point at it.
+            docker push "$REGISTRY/$image:${{ steps.meta.outputs.tag }}"
+            docker push "$REGISTRY/$image:main"
+          done
+          echo "| Publish | ✅ \`$REGISTRY/chaos-arena-{app,web}:${{ steps.meta.outputs.tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: Deploy to production
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    # Shows up under "Deployments" on the repo page, with a link to the live site.
+    environment:
+      name: production
+      url: ${{ env.LIVE_URL }}
+    steps:
+      - name: Wait for the server to deploy this commit
+        run: |
+          # The server's deploy agent checks for new images every minute,
+          # deploys them, and rolls back by itself if they are unhealthy.
+          # Here we just watch the live site until it reports this commit.
+          echo "Waiting for $LIVE_URL to run ${GITHUB_SHA::7}..."
+          FIRST="$(curl -sf -m 10 "$LIVE_URL/api/health" || true)"
+          if [[ "$FIRST" != *'"version"'* ]]; then
+            echo "::notice::The live server doesn't report versions yet (deploy agent not installed). Skipping the wait."
+            echo "| Deploy | ⏭️ skipped: deploy agent not installed on the server yet |" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          for i in $(seq 1 40); do
+            LIVE="$(curl -sf -m 10 "$LIVE_URL/api/health" || true)"
+            if [[ "$LIVE" == *"\"version\":\"$GITHUB_SHA\""* ]]; then
+              echo "Live after ~$((i * 15)) s: $LIVE"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::The server did not switch to this commit within 10 minutes (the agent may have rolled it back). Check: sudo journalctl -u arena-deploy -n 50"
+          exit 1
+
+      - name: Smoke test the live site
+        run: |
+          curl -sf "$LIVE_URL/" | grep -q '<title>Chaos Arena</title>'
+          STATUS="$(curl -sf -m 15 "$LIVE_URL/api/status")"
+          echo "$STATUS"
+          [[ "$STATUS" == *'"status":"ok"'* ]]
+          echo "| Deploy | ✅ live on $LIVE_URL, database + storage ok |" >> "$GITHUB_STEP_SUMMARY"
