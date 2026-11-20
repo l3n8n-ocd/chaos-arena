@@ -68,6 +68,7 @@ if [[ "$FREEZE" -eq 1 ]]; then
   echo "unhealthy, and the deploy agent (every minute) restarts it."
   echo
   START=$(date +%s)
+  LINES_BEFORE=$(wc -l < "$LOG")   # only count heals logged AFTER this point
   echo "\$ docker exec chaos-arena-app-1 kill -STOP <node process>"
   docker exec chaos-arena-app-1 sh -c 'kill -STOP $(pgrep -o -x node)'
   echo "Frozen at $(date -u +%H:%M:%S). Waiting (health check needs ~30-40 s, agent runs every minute)..."
@@ -75,7 +76,7 @@ if [[ "$FREEZE" -eq 1 ]]; then
   for _ in $(seq 1 60); do
     sleep 5
     STATUS="$(docker inspect -f '{{.State.Health.Status}}' chaos-arena-app-1)"
-    if grep -q container_healed <(tail -n 3 "$LOG") && [[ "$STATUS" == healthy ]]; then HEALED=1; break; fi
+    if tail -n +"$((LINES_BEFORE + 1))" "$LOG" | grep -q container_healed && [[ "$STATUS" == healthy ]]; then HEALED=1; break; fi
   done
   END=$(date +%s)
   if [[ "$HEALED" -eq 1 ]]; then
