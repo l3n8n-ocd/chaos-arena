@@ -1,0 +1,12 @@
+{
+  "name": "chaos-arena-diagram",
+  "private": true,
+  "description": "Icon sets used to generate docs/architecture.svg",
+  "scripts": {
+    "build": "python3 make_diagram.py node_modules ../architecture.svg"
+  },
+  "devDependencies": {
+    "aws-icons": "3.3.0",
+    "simple-icons": "16.38.0"
+  }
+}
