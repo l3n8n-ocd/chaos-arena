@@ -1,0 +1,81 @@
+Chaos Arena — Module 05 verification report
+Generated: 2026-11-20 02:12:11 UTC
+
+=================== 1. LIVE VERSION vs LATEST COMMIT ON GITHUB ===================
+Latest commit on main : e2a6a3244a809b62a53ea44aa595f8718183272b
+Running on https://chaos-arena.duckdns.org : e2a6a3244a809b62a53ea44aa595f8718183272b
+RESULT: the live site runs the latest commit (continuous deployment works).
+
+
+=================== 2. DEPLOY AGENT ===================
+$ systemctl is-enabled arena-deploy.timer && systemctl is-active arena-deploy.timer
+enabled
+active
+
+$ systemctl list-timers arena-deploy.timer --no-pager | head -n 2
+NEXT                        LEFT LAST                         PASSED UNIT               ACTIVATES
+Fri 2026-11-20 10:12:29 PST  17s Fri 2026-11-20 10:11:29 PST 42s ago arena-deploy.timer arena-deploy.service
+
+$ echo "Deployed tag: $(cat /var/lib/chaos-arena/deployed-tag 2>/dev/null || echo none)"; echo "Rolled-back tags: $(cat /var/lib/chaos-arena/bad-tags 2>/dev/null | tr '\n' ' ' || true)"
+Deployed tag: sha-e2a6a32
+Rolled-back tags: 
+
+
+=================== 3. DEPLOYMENT HISTORY (agent log, newest last) ===================
+$ grep -E 'deploy_(started|succeeded|failed|rolled_back)|container_healed' /srv/chaos-arena/logs/deploy.log | tail -n 12 | cut -c1-200
+{"time":"2026-11-20T01:42:27.850Z","level":"info","source":"arena-deploy","event":"deploy_started","msg":"deploying a new version","previous":"local-build","version":"sha-227b545","commit":"227b545c4b
+{"time":"2026-11-20T01:42:42.582Z","level":"info","source":"arena-deploy","event":"deploy_succeeded","msg":"new version is live","version":"sha-227b545","commit":"227b545c4b405c175095b68604bb5107ae8fd
+{"time":"2026-11-20T01:50:04.002Z","level":"info","source":"arena-deploy","event":"deploy_started","msg":"deploying a new version","previous":"sha-227b545","version":"sha-e2a6a32","commit":"e2a6a3244a
+{"time":"2026-11-20T01:50:17.645Z","level":"info","source":"arena-deploy","event":"deploy_succeeded","msg":"new version is live","version":"sha-e2a6a32","commit":"e2a6a3244a809b62a53ea44aa595f87181832
+{"time":"2026-11-20T01:59:35.575Z","level":"warn","source":"arena-deploy","event":"container_healed","msg":"container was unhealthy, restarting it","container":"chaos-arena-app-1"}
+
+
+=================== 4. IMAGES FROM THE PIPELINE (GitHub Container Registry) ===================
+$ docker image ls 'ghcr.io/l3n8n-ocd/*' --format 'table {{.Repository}}:{{.Tag}}\t{{.Size}}\t{{.CreatedSince}}'
+REPOSITORY:TAG                                  SIZE      CREATED
+ghcr.io/l3n8n-ocd/chaos-arena-web:main          81.5MB    23 minutes ago
+ghcr.io/l3n8n-ocd/chaos-arena-web:sha-e2a6a32   81.5MB    23 minutes ago
+ghcr.io/l3n8n-ocd/chaos-arena-app:main          274MB     23 minutes ago
+ghcr.io/l3n8n-ocd/chaos-arena-app:sha-e2a6a32   274MB     23 minutes ago
+ghcr.io/l3n8n-ocd/chaos-arena-web:sha-227b545   81.5MB    8 hours ago
+ghcr.io/l3n8n-ocd/chaos-arena-app:sha-227b545   274MB     8 hours ago
+
+$ docker inspect chaos-arena-app-1 chaos-arena-web-1 --format '{{.Name}} runs {{.Config.Image}} (health: {{.State.Health.Status}})'
+/chaos-arena-app-1 runs ghcr.io/l3n8n-ocd/chaos-arena-app:sha-e2a6a32 (health: healthy)
+/chaos-arena-web-1 runs ghcr.io/l3n8n-ocd/chaos-arena-web:sha-e2a6a32 (health: healthy)
+
+$ docker image inspect $(docker inspect -f '{{.Config.Image}}' chaos-arena-app-1) --format 'built from commit: {{index .Config.Labels "org.opencontainers.image.revision"}}'
+built from commit: e2a6a3244a809b62a53ea44aa595f8718183272b
+
+
+=================== 5. MONITORING ===================
+$ curl -s -m 10 https://chaos-arena.duckdns.org/api/status
+{"status":"ok","checks":{"database":{"ok":true,"kind":"dynamo","detail":"table chaos-arena is ACTIVE"},"storage":{"ok":true,"kind":"s3","detail":"bucket chaos-arena-915059653170-ap-southeast-2 is reachable"}},"version":"e2a6a3244a809b62a53ea44aa595f8718183272b","region":"ap-southeast-2","node":"v22.23.5","environment":"production","memoryMb":73,"uptimeSec":49}
+
+$ docker inspect chaos-arena-app-1 --format 'app logs -> {{.HostConfig.LogConfig.Type}} {{index .HostConfig.LogConfig.Config "awslogs-group"}}'
+app logs -> awslogs /chaos-arena/app
+
+$ /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a status -m ec2 | grep -E '"status"'
+  "status": "running",
+
+$ grep -o '"file_path": "[^"]*"' /opt/aws/amazon-cloudwatch-agent/etc/chaos-arena-config.json
+"file_path": "/srv/chaos-arena/logs/deploy.log"
+"file_path": "/var/log/nginx/chaos-arena.access.log"
+"file_path": "/var/log/nginx/chaos-arena.error.log"
+
+
+=================== 6. FREEZE TEST (app hangs without crashing; the agent heals it) ===================
+Docker's restart policy only reacts to a CRASH. Here the app is frozen instead:
+still 'running', but it stops answering. Its health check fails, Docker marks it
+unhealthy, and the deploy agent (every minute) restarts it.
+
+$ docker exec chaos-arena-app-1 kill -STOP <node process>
+Frozen at 02:12:12. Waiting (health check needs ~30-40 s, agent runs every minute)...
+RESULT: healed. Frozen app detected and restarted in 5 s, no human involved.
+$ grep container_healed /srv/chaos-arena/logs/deploy.log | tail -n 1 | cut -c1-200
+{"time":"2026-11-20T01:59:35.575Z","level":"warn","source":"arena-deploy","event":"container_healed","msg":"container was unhealthy, restarting it","container":"chaos-arena-app-1"}
+
+$ curl -s -m 5 https://chaos-arena.duckdns.org/api/health
+
+
+=================== END OF REPORT ===================
